@@ -1,0 +1,166 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+=============================================================================
+MÓDULO: pos_return
+ARCHIVO: static/src/app/return_popup/return_popup.xml
+DESCRIPCIÓN: Template XML del popup de devoluciones
+MIGRADO: Odoo 18 -> Odoo 19
+FECHA: 2026-02-01
+=============================================================================
+
+NOTAS DE MIGRACIÓN:
+- Template definido con t-name="pos_return.ReturnPopup"
+- Uso de componente <Dialog> estándar
+- Directivas OWL (t-model, t-if, t-foreach, t-on-click) compatibles con v19
+- Clases CSS de Bootstrap 5 (standard en Odoo 18/19)
+- Formato de moneda usando env.utils.formatCurrency - API estable
+
+=============================================================================
+-->
+<templates id="template" xml:space="preserve">
+
+    <t t-name="pos_return.ReturnPopup">
+        <Dialog title="'Devolución'" size="'lg'">
+            <div class="return-popup p-3">
+                <!-- Ticket Input -->
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Número de Ticket (Arus) *</label>
+                    <input 
+                        type="text" 
+                        class="form-control form-control-lg"
+                        t-model="state.ticket"
+                        placeholder="Ingrese el número de ticket..."
+                        required="required"
+                    />
+                </div>
+                
+                <!-- Product Search -->
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Buscar Producto</label>
+                    <div class="input-group">
+                        <input 
+                            type="text" 
+                            class="form-control"
+                            t-model="state.searchQuery"
+                            placeholder="Escanear código o buscar producto..."
+                        />
+                        <button 
+                            t-if="isBarcodeScannerSupported()"
+                            type="button" 
+                            class="btn btn-outline-secondary"
+                            t-on-click="onClickScan"
+                            title="Escanear código de barras"
+                        >
+                            <i class="fa fa-fw fa-lg fa-barcode"/>
+                            <span t-if="state.scanning" class="ms-1">Stop</span>
+                        </button>
+                    </div>
+                    
+                    <!-- Barcode Scanner Video -->
+                    <div t-if="state.scanning" class="mt-2">
+                        <ReturnBarcodeScanner onBarcodeScanned.bind="onBarcodeScanned"/>
+                    </div>
+                    
+                    <!-- Search Results -->
+                    <div t-if="filteredProducts.length > 0" class="list-group mt-2 search-results" style="max-height: 200px; overflow-y: auto;">
+                        <t t-foreach="filteredProducts" t-as="product" t-key="product.id">
+                            <button 
+                                type="button" 
+                                class="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
+                                t-on-click="() => this.addProduct(product)"
+                            >
+                                <span>
+                                    <t t-if="product.default_code">
+                                        [<t t-esc="product.default_code"/>] 
+                                    </t>
+                                    <t t-esc="product.display_name"/>
+                                </span>
+                                <t t-esc="env.utils.formatCurrency(product.lst_price)"/>
+                            </button>
+                        </t>
+                    </div>
+                </div>
+                
+                <!-- Selected Products List -->
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Productos a Devolver</label>
+                    <t t-if="state.products.length === 0">
+                        <div class="alert alert-info">
+                            No hay productos seleccionados. Busque y seleccione productos para la devolución.
+                        </div>
+                    </t>
+                    <t t-else="">
+                        <table class="table table-sm table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Producto</th>
+                                    <th style="width: 100px;">Cantidad</th>
+                                    <th style="width: 120px;">Precio Unit.</th>
+                                    <th style="width: 120px;">Subtotal</th>
+                                    <th style="width: 50px;"></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <t t-foreach="state.products" t-as="product" t-key="product_index">
+                                    <tr>
+                                        <td t-esc="product.name"/>
+                                        <td>
+                                            <input 
+                                                type="number" 
+                                                class="form-control form-control-sm"
+                                                t-att-value="product.quantity"
+                                                min="1"
+                                                step="1"
+                                                t-on-change="(ev) => this.updateQuantity(product_index, ev.target.value)"
+                                            />
+                                        </td>
+                                        <td t-esc="env.utils.formatCurrency(product.price_unit)"/>
+                                        <td t-esc="env.utils.formatCurrency(product.quantity * product.price_unit)"/>
+                                        <td>
+                                            <button 
+                                                type="button" 
+                                                class="btn btn-sm btn-danger"
+                                                t-on-click="() => this.removeProduct(product_index)"
+                                            >
+                                                <i class="fa fa-trash"/>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                </t>
+                            </tbody>
+                            <tfoot>
+                                <tr class="table-dark">
+                                    <td colspan="3" class="text-end fw-bold">Total a Devolver:</td>
+                                    <td class="fw-bold" t-esc="formattedTotal"/>
+                                    <td></td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </t>
+                </div>
+            </div>
+            
+            <!-- Dialog Footer Buttons -->
+            <t t-set-slot="footer">
+                <div class="d-flex gap-2 w-100 justify-content-end">
+                    <button 
+                        type="button" 
+                        class="btn btn-secondary btn-lg"
+                        t-on-click="cancel"
+                    >
+                        Cancelar
+                    </button>
+                    <button 
+                        type="button" 
+                        class="btn btn-primary btn-lg"
+                        t-att-disabled="!isValidReturn()"
+                        t-on-click="confirm"
+                    >
+                        <i class="fa fa-check me-2"/>Confirmar Devolución
+                    </button>
+                </div>
+            </t>
+        </Dialog>
+    </t>
+
+</templates>
