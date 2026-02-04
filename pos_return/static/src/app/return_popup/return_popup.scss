@@ -1,0 +1,35 @@
+/* 
+ * Hide edit/details buttons in Partner List Screen 
+ * User request: "those squares on the right hide them"
+ */
+
+/* EDIT / DETAILS BUTTONS */
+.partner-list .fa-unordered-list,
+.partner-list .fa-bars,
+.partner-list .fa-pencil,
+.partner-list .fa-edit {
+    display: none !important;
+}
+
+.partner-list .partner-line .edit-partner-button,
+.partner-list .partner-line button:has(.fa-bars),
+.partner-list .partner-line button:has(.fa-pencil) {
+    display: none !important;
+    opacity: 0 !important;
+    visibility: hidden !important;
+    width: 0 !important;
+    padding: 0 !important;
+}
+
+.partner-list-screen .partner-line .edit-partner-button,
+.partner-list-screen .partner-line .fa-bars {
+    display: none !important;
+}
+
+/* CREATE BUTTON (Top Left/Right) */
+/* User request: "Necesito que ocultes esto" (pointing to Create button) */
+.partner-list-screen .button.new-customer,
+.partner-list-screen .button.create,
+.partner-list-screen .top-content .button.new-customer {
+    display: none !important;
+}

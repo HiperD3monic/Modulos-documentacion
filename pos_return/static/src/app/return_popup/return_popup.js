@@ -1,24 +1,3 @@
-/**
- * =============================================================================
- * MÓDULO: pos_return
- * ARCHIVO: static/src/app/return_popup/return_popup.js
- * DESCRIPCIÓN: Componente OWL para el popup de devoluciones
- * MIGRADO: Odoo 18 -> Odoo 19
- * FECHA: 2026-02-01
- * =============================================================================
- * 
- * NOTAS DE MIGRACIÓN:
- * - Imports de @web/core/, @odoo/owl, @point_of_sale/ siguen siendo estables
- * - OWL v2 sintaxis (Component, useState, useService) compatible con v19
- * - usePos() hook sigue disponible en @point_of_sale/app/store/pos_hook
- * - BarcodeVideoScanner sigue en @web/core/barcode/barcode_video_scanner
- * - useAsyncLockedMethod de @point_of_sale/app/utils/hooks sigue disponible
- * - this.pos.data.call() y this.pos.data.callRelated() pueden tener cambios
- *   menores en v19 - marcados con TODO para revisión
- * 
- * =============================================================================
- */
-
 import { _t } from "@web/core/l10n/translation";
 import { useService } from "@web/core/utils/hooks";
 import { parseFloat } from "@web/views/fields/parsers";
@@ -28,6 +7,9 @@ import { Dialog } from "@web/core/dialog/dialog";
 import { useAsyncLockedMethod } from "@point_of_sale/app/hooks/hooks";
 import { Input } from "@point_of_sale/app/components/inputs/input/input";
 import { BarcodeVideoScanner, isBarcodeScannerSupported } from "@web/core/barcode/barcode_video_scanner";
+import { PartnerList } from "@point_of_sale/app/screens/partner_list/partner_list";
+import { makeAwaitable } from "@point_of_sale/app/utils/make_awaitable_dialog";
+import { TicketListPopup } from "../ticket_list_popup/ticket_list_popup";
 
 /**
  * ReturnBarcodeScanner
@@ -90,6 +72,10 @@ export class ReturnPopup extends Component {
             products: [],         // Productos seleccionados para devolución
             searchQuery: "",      // Query de búsqueda de productos
             scanning: false,      // Estado del escáner de código de barras
+            returnType: "odoo",   // 'odoo', 'arus', 'no_ticket'
+            partner: null,        // Cliente seleccionado
+            customerTickets: [],  // Lista de tickets del cliente
+            selectedTicket: null, // Objeto completo del ticket seleccionado
         });
 
         // Lock para evitar múltiples confirmaciones simultáneas
@@ -101,6 +87,129 @@ export class ReturnPopup extends Component {
      */
     onClickScan() {
         this.state.scanning = !this.state.scanning;
+    }
+
+    /**
+     * Handle return type change.
+     * Resets dependent state to avoid inconsistent data.
+     */
+    onTypeChange(ev) {
+        // t-model handles the value update, but we need to clear data
+        // associated with the previous type.
+        this.state.products = [];
+        this.state.selectedTicket = null;
+        this.state.ticket = "";
+        this.state.searchQuery = "";
+
+        // If switching back to Odoo, we might want to re-fetch partner tickets
+        // but selectPartner logic handles that when partner changes. 
+        // If partner is already selected, tickets are likely cached in customerTickets.
+
+        // Fix: If partner is selected but tickets are missing (e.g. selected during Arus mode),
+        // we must fetch them now.
+        if (ev.target.value === 'odoo' && this.state.partner) {
+            this._loadTicketsForPartner(this.state.partner.id);
+        }
+    }
+
+    async _loadTicketsForPartner(partnerId) {
+        try {
+            const tickets = await this.orm.call(
+                "pos.session",
+                "get_partner_tickets",
+                [odoo.pos_session_id, partnerId]
+            );
+            this.state.customerTickets = tickets;
+        } catch (error) {
+            console.error("Error fetching partner tickets:", error);
+            this.notification.add(_t("Error al cargar tickets del cliente"), { type: "danger" });
+            this.state.customerTickets = [];
+        }
+    }
+
+    async selectPartner() {
+        const newPartner = await makeAwaitable(this.dialog, PartnerList, {
+            partner: this.state.partner,
+        });
+
+        // Debug logging
+        console.log("ReturnPopup: PartnerList result (raw):", newPartner);
+
+        // Treat undefined (from 'X' button) as null.
+        const resolvedPartner = newPartner || null;
+
+        // Compare IDs to see if there is an actual change.
+        // If user clicked 'Discard', PartnerList returns the original partner -> IDs match -> No change.
+        // If user clicked 'X', newPartner is undefined -> resolvedPartner is null -> IDs differ -> Update.
+        const currentId = this.state.partner ? this.state.partner.id : null;
+        const newId = resolvedPartner ? resolvedPartner.id : null;
+
+        if (currentId !== newId) {
+            console.log("ReturnPopup: Updating partner to:", resolvedPartner);
+            this.state.partner = resolvedPartner;
+
+            // Clear previous ticket data to prevent mismatch
+            this.state.customerTickets = [];
+            this.state.selectedTicket = null;
+            this.state.ticket = "";
+            this.state.products = [];
+            this.state.searchQuery = "";
+
+            if (resolvedPartner && this.state.returnType === 'odoo') {
+                await this._loadTicketsForPartner(resolvedPartner.id);
+            }
+
+            // Notification to confirm reset (and debug reactivity)
+            const msg = resolvedPartner
+                ? _t("Cliente actualizado. Ticket reiniciado.")
+                : _t("Cliente desvinculado.");
+            this.notification.add(msg, { type: "info" });
+        }
+    }
+
+    async searchTickets() {
+        if (this.state.customerTickets.length === 0) {
+            this.notification.add(_t("El cliente no tiene tickets recientes."), { type: "warning" });
+            return;
+        }
+
+        const selectedTicket = await makeAwaitable(this.dialog, TicketListPopup, {
+            tickets: this.state.customerTickets,
+        });
+
+        if (selectedTicket) {
+            this.state.selectedTicket = selectedTicket;
+            this.state.ticket = selectedTicket.pos_reference || selectedTicket.name;
+
+            // Auto-populate products from the ticket (only returnable items)
+            if (selectedTicket.lines && selectedTicket.lines.length > 0) {
+                this.state.products = selectedTicket.lines.map(line => ({
+                    product_id: line.product_id,
+                    name: line.name,
+                    quantity: line.remaining_qty || line.qty, // Default to remaining
+                    max_quantity: line.remaining_qty || line.qty, // Enforce limit
+                    price_unit: line.price_unit,
+                }));
+            } else {
+                this.state.products = [];
+            }
+        }
+    }
+
+    get inputPlaceholder() {
+        if (this.state.returnType === "no_ticket") {
+            return _t("Ingrese la razón de la devolución...");
+        }
+        return _t("Ingrese el número de ticket...");
+    }
+
+    get inputLabel() {
+        if (this.state.returnType === "no_ticket") {
+            return _t("Razón de Devolución *");
+        } else if (this.state.returnType === "arus") {
+            return _t("Número de Ticket (Arus) *");
+        }
+        return _t("Número de Ticket (Odoo) *");
     }
 
     /**
@@ -128,9 +237,6 @@ export class ReturnPopup extends Component {
         } else {
             // Si no está en cache, buscar en la base de datos
             try {
-                // TODO: revisar en Odoo 19 - La API pos.data.callRelated podría
-                // haber cambiado. En v19, considerar usar this.pos.data.call()
-                // o el nuevo sistema de comunicación frontend-backend.
                 const records = await this.pos.data.callRelated(
                     "pos.session",
                     "find_product_by_barcode",
@@ -233,11 +339,26 @@ export class ReturnPopup extends Component {
      * @param {string} value - Nuevo valor de cantidad
      */
     updateQuantity(index, value) {
-        const qty = parseFloat(value) || 0;
+        let qty = parseFloat(value) || 0;
+        const product = this.state.products[index];
+
+        // Validate against max_quantity if it exists (Strict Mode)
+        // Validate against max_quantity if it exists (Strict Mode)
+        // We do NOT clamp the value here anymore. We allow the invalid value in state,
+        // which causes isValidReturn property to become false, disabling the confirm button.
+        if (product.max_quantity !== undefined && qty > product.max_quantity) {
+            this.notification.add(
+                _t("Atención: La cantidad ingresada (%s) excede el máximo permitido (%s). Corríjala para continuar.", qty, product.max_quantity),
+                { type: "warning" }
+            );
+            // We do NOT reset qty = product.max_quantity here.
+            // This ensures the button gets disabled.
+        }
+
         if (qty <= 0) {
             this.removeProduct(index);
         } else {
-            this.state.products[index].quantity = qty;
+            product.quantity = qty;
         }
     }
 
@@ -256,10 +377,21 @@ export class ReturnPopup extends Component {
      * @returns {boolean} true si la devolución es válida
      */
     isValidReturn() {
+        const hasTicketOrReason = this.state.ticket.trim() !== "";
+
+        // Ensure all quantities are within limits
+        const withinLimits = this.state.products.every(p => {
+            if (p.max_quantity !== undefined) {
+                return p.quantity <= p.max_quantity;
+            }
+            return true;
+        });
+
         return (
-            this.state.ticket.trim() !== "" &&
+            hasTicketOrReason &&
             this.state.products.length > 0 &&
-            this.totalAmount > 0
+            this.totalAmount > 0 &&
+            withinLimits
         );
     }
 
@@ -279,6 +411,18 @@ export class ReturnPopup extends Component {
             return;
         }
 
+        // Final Security Check: Ensure no product exceeds max_quantity
+        // This prevents bypassing UI limits
+        for (const product of this.state.products) {
+            if (product.max_quantity !== undefined && product.quantity > product.max_quantity) {
+                this.notification.add(
+                    _t("Error: La cantidad de %s excede lo comprado (%s).", product.name, product.max_quantity),
+                    { type: "danger" }
+                );
+                return;
+            }
+        }
+
         try {
             // Preparar datos de productos
             const productsData = this.state.products.map((p) => ({
@@ -287,13 +431,16 @@ export class ReturnPopup extends Component {
                 price_unit: p.price_unit,
             }));
 
-            // TODO: revisar en Odoo 19 - La API pos.data.call podría
-            // haber cambiado. El cuarto parámetro (true) es para indicar
-            // que se ignoren errores de red. Verificar si esto sigue vigente.
             const result = await this.orm.call(
                 "pos.session",
                 "create_return",
-                [[this.pos.session.id], this.state.ticket.trim(), productsData]
+                [
+                    [this.pos.session.id],
+                    this.state.ticket.trim(),
+                    productsData,
+                    this.state.returnType,
+                    this.state.partner ? this.state.partner.id : false
+                ]
             );
 
             if (result.success) {

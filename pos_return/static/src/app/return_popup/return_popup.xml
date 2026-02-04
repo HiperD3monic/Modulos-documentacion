@@ -1,161 +1,223 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!--
-=============================================================================
-MÓDULO: pos_return
-ARCHIVO: static/src/app/return_popup/return_popup.xml
-DESCRIPCIÓN: Template XML del popup de devoluciones
-MIGRADO: Odoo 18 -> Odoo 19
-FECHA: 2026-02-01
-=============================================================================
-
-NOTAS DE MIGRACIÓN:
-- Template definido con t-name="pos_return.ReturnPopup"
-- Uso de componente <Dialog> estándar
-- Directivas OWL (t-model, t-if, t-foreach, t-on-click) compatibles con v19
-- Clases CSS de Bootstrap 5 (standard en Odoo 18/19)
-- Formato de moneda usando env.utils.formatCurrency - API estable
-
-=============================================================================
--->
 <templates id="template" xml:space="preserve">
 
     <t t-name="pos_return.ReturnPopup">
         <Dialog title="'Devolución'" size="'lg'">
-            <div class="return-popup p-3">
-                <!-- Ticket Input -->
-                <div class="mb-3">
-                    <label class="form-label fw-bold">Número de Ticket (Arus) *</label>
-                    <input 
-                        type="text" 
-                        class="form-control form-control-lg"
-                        t-model="state.ticket"
-                        placeholder="Ingrese el número de ticket..."
-                        required="required"
-                    />
-                </div>
-                
-                <!-- Product Search -->
-                <div class="mb-3">
-                    <label class="form-label fw-bold">Buscar Producto</label>
-                    <div class="input-group">
-                        <input 
-                            type="text" 
-                            class="form-control"
-                            t-model="state.searchQuery"
-                            placeholder="Escanear código o buscar producto..."
-                        />
-                        <button 
-                            t-if="isBarcodeScannerSupported()"
-                            type="button" 
-                            class="btn btn-outline-secondary"
-                            t-on-click="onClickScan"
-                            title="Escanear código de barras"
-                        >
-                            <i class="fa fa-fw fa-lg fa-barcode"/>
-                            <span t-if="state.scanning" class="ms-1">Stop</span>
-                        </button>
-                    </div>
-                    
-                    <!-- Barcode Scanner Video -->
-                    <div t-if="state.scanning" class="mt-2">
-                        <ReturnBarcodeScanner onBarcodeScanned.bind="onBarcodeScanned"/>
-                    </div>
-                    
-                    <!-- Search Results -->
-                    <div t-if="filteredProducts.length > 0" class="list-group mt-2 search-results" style="max-height: 200px; overflow-y: auto;">
-                        <t t-foreach="filteredProducts" t-as="product" t-key="product.id">
-                            <button 
-                                type="button" 
-                                class="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
-                                t-on-click="() => this.addProduct(product)"
-                            >
-                                <span>
-                                    <t t-if="product.default_code">
-                                        [<t t-esc="product.default_code"/>] 
-                                    </t>
-                                    <t t-esc="product.display_name"/>
-                                </span>
-                                <t t-esc="env.utils.formatCurrency(product.lst_price)"/>
-                            </button>
-                        </t>
-                    </div>
-                </div>
-                
-                <!-- Selected Products List -->
-                <div class="mb-3">
-                    <label class="form-label fw-bold">Productos a Devolver</label>
-                    <t t-if="state.products.length === 0">
-                        <div class="alert alert-info">
-                            No hay productos seleccionados. Busque y seleccione productos para la devolución.
+            <div class="return-popup p-0 h-100" style="min-height: 380px;">
+                <div class="row g-0 h-100">
+                    <!-- LEFT COLUMN: Control Panel -->
+                    <div class="col-4 bg-light border-end d-flex flex-column h-100">
+                        <div class="p-3">
+                            <!-- Return Type Selection -->
+                            <div class="mb-3">
+                                <label class="form-label fw-bold text-uppercase small text-muted mb-2">Tipo de Devolución</label>
+                                <div class="d-flex flex-column gap-2 bg-white rounded p-2 border">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="returnType" id="typeOdoo" value="odoo" t-model="state.returnType" t-on-change="onTypeChange"/>
+                                        <label class="form-check-label" for="typeOdoo">Ticket Odoo</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="returnType" id="typeArus" value="arus" t-model="state.returnType" t-on-change="onTypeChange"/>
+                                        <label class="form-check-label" for="typeArus">Ticket Arus</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="returnType" id="typeNoTicket" value="no_ticket" t-model="state.returnType" t-on-change="onTypeChange"/>
+                                        <label class="form-check-label" for="typeNoTicket">No posee Ticket</label>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Customer Selection -->
+                            <div class="mb-3">
+                                <label class="form-label fw-bold text-uppercase small text-muted mb-2">Cliente</label>
+                                <div class="card border-0 shadow-sm">
+                                    <div class="card-body p-2 d-flex align-items-center justify-content-between">
+                                        <div class="d-flex align-items-center text-truncate pe-2">
+                                            <div class="bg-primary bg-opacity-10 text-primary rounded-circle d-flex align-items-center justify-content-center me-2" style="width: 35px; height: 35px; min-width: 35px;">
+                                                <i class="fa fa-user"/>
+                                            </div>
+                                            <div class="text-truncate">
+                                                 <t t-if="state.partner">
+                                                    <div class="fw-bold text-dark text-truncate" t-esc="state.partner.name"/>
+                                                </t>
+                                                <t t-else="">
+                                                    <span class="text-muted fst-italic">Seleccionar...</span>
+                                                </t>
+                                            </div>
+                                        </div>
+                                        <button class="btn btn-sm btn-light border text-primary" t-on-click="selectPartner">
+                                            <i class="fa fa-pencil"/>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Ticket Input / Info -->
+                            <div class="mb-3">
+                                <label class="form-label fw-bold text-uppercase small text-muted mb-2" t-esc="inputLabel"/>
+                                
+                                <!-- Odoo Ticket Context -->
+                                <div t-if="state.returnType === 'odoo'">
+                                     <div t-if="state.selectedTicket" class="card bg-white border-success mb-2">
+                                        <div class="card-body p-2">
+                                            <div class="d-flex justify-content-between align-items-start">
+                                                <div>
+                                                    <div class="fw-bold text-success text-truncate" t-esc="state.selectedTicket.pos_reference || state.selectedTicket.name"/>
+                                                    <div class="d-flex text-muted small gap-2 mt-1">
+                                                        <span><i class="fa fa-calendar me-1"/> <t t-esc="state.selectedTicket.date_order.split(' ')[0]"/></span>
+                                                        <span><i class="fa fa-money me-1"/> <t t-esc="env.utils.formatCurrency(state.selectedTicket.amount_total)"/></span>
+                                                    </div>
+                                                </div>
+                                                <button class="btn btn-sm btn-outline-secondary" t-on-click="searchTickets" title="Cambiar Ticket">
+                                                    <i class="fa fa-refresh"/>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div t-elif="state.customerTickets.length > 0">
+                                        <button class="btn btn-outline-success w-100 fw-bold py-2 shadow-sm" t-on-click="searchTickets">
+                                            <i class="fa fa-list-alt me-2"/> Buscar Ticket
+                                        </button>
+                                    </div>
+
+                                     <div t-elif="state.partner" class="alert alert-warning py-2 small">
+                                        <i class="fa fa-info-circle me-1"/>Sin tickets recientes.
+                                    </div>
+                                </div>
+
+                                <!-- Input Box (Always visible as fallback or main input for other types) -->
+                                <input 
+                                    type="text" 
+                                    class="form-control"
+                                    t-model="state.ticket"
+                                    t-att-placeholder="inputPlaceholder"
+                                    t-att-readonly="state.selectedTicket ? 'readonly' : undefined"
+                                    t-att-class="state.selectedTicket ? 'd-none' : ''"
+                                />
+                            </div>
                         </div>
-                    </t>
-                    <t t-else="">
-                        <table class="table table-sm table-striped">
-                            <thead>
-                                <tr>
-                                    <th>Producto</th>
-                                    <th style="width: 100px;">Cantidad</th>
-                                    <th style="width: 120px;">Precio Unit.</th>
-                                    <th style="width: 120px;">Subtotal</th>
-                                    <th style="width: 50px;"></th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <t t-foreach="state.products" t-as="product" t-key="product_index">
-                                    <tr>
-                                        <td t-esc="product.name"/>
-                                        <td>
-                                            <input 
-                                                type="number" 
-                                                class="form-control form-control-sm"
-                                                t-att-value="product.quantity"
-                                                min="1"
-                                                step="1"
-                                                t-on-change="(ev) => this.updateQuantity(product_index, ev.target.value)"
-                                            />
-                                        </td>
-                                        <td t-esc="env.utils.formatCurrency(product.price_unit)"/>
-                                        <td t-esc="env.utils.formatCurrency(product.quantity * product.price_unit)"/>
-                                        <td>
-                                            <button 
-                                                type="button" 
-                                                class="btn btn-sm btn-danger"
-                                                t-on-click="() => this.removeProduct(product_index)"
-                                            >
-                                                <i class="fa fa-trash"/>
-                                            </button>
-                                        </td>
-                                    </tr>
+
+                    </div>
+
+                    <!-- RIGHT COLUMN: Product List -->
+                    <div class="col-8 d-flex flex-column h-100 bg-white">
+                        <!-- Top: Product Search (Relocated) -->
+                        <div class="p-3 border-bottom bg-white position-relative" t-if="!state.selectedTicket">
+                             <!-- Search Results Overlay (positioned below input now) -->
+                            <div t-if="filteredProducts.length > 0" class="list-group mt-1 border shadow-sm position-absolute w-100 start-0 bg-white" style="max-height: 250px; overflow-y: auto; z-index: 2000; top: 100%;">
+                                <t t-foreach="filteredProducts" t-as="product" t-key="product.id">
+                                    <button type="button" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
+                                        t-on-click="() => this.addProduct(product)">
+                                        <span class="text-truncate me-2">
+                                            <t t-if="product.default_code">[<t t-esc="product.default_code"/>] </t>
+                                            <t t-esc="product.display_name"/>
+                                        </span>
+                                        <span class="fw-bold"><t t-esc="env.utils.formatCurrency(product.lst_price)"/></span>
+                                    </button>
                                 </t>
-                            </tbody>
-                            <tfoot>
-                                <tr class="table-dark">
-                                    <td colspan="3" class="text-end fw-bold">Total a Devolver:</td>
-                                    <td class="fw-bold" t-esc="formattedTotal"/>
-                                    <td></td>
-                                </tr>
-                            </tfoot>
-                        </table>
-                    </t>
+                            </div>
+
+                            <label class="form-label fw-bold text-uppercase small text-muted mb-2">Añadir Producto</label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-white border-end-0"><i class="fa fa-search text-muted"/></span>
+                                <input 
+                                    type="text" 
+                                    class="form-control border-start-0 ps-0"
+                                    t-model="state.searchQuery"
+                                    placeholder="Buscar o escanear productos..."
+                                />
+                                <button 
+                                    t-if="isBarcodeScannerSupported()"
+                                    type="button" 
+                                    class="btn btn-outline-secondary"
+                                    t-on-click="onClickScan"
+                                >
+                                    <i class="fa fa-barcode"/>
+                                </button>
+                            </div>
+                             <!-- Barcode Scanner Video -->
+                            <div t-if="state.scanning" class="mt-2 text-center bg-dark p-1 rounded">
+                                <ReturnBarcodeScanner onBarcodeScanned.bind="onBarcodeScanned"/>
+                            </div>
+                        </div>
+                        <div class="flex-grow-1 overflow-auto p-0">
+                            <t t-if="state.products.length === 0">
+                                <div class="d-flex flex-column align-items-center justify-content-center h-100 text-muted">
+                                    <i class="fa fa-shopping-basket fa-4x mb-3 text-light"/>
+                                    <h5>Lista de devolución vacía</h5>
+                                    <p class="small">Seleccione un ticket o busque productos para comenzar.</p>
+                                </div>
+                            </t>
+                            <t t-else="">
+                                <table class="table table-hover mb-0 align-middle">
+                                    <thead class="table-light sticky-top border-bottom">
+                                        <tr>
+                                            <th class="ps-4">Producto</th>
+                                            <th class="text-center" style="width: 120px;">Cantidad</th>
+                                            <th class="text-end" style="width: 120px;">Precio</th>
+                                            <th class="text-end pe-4" style="width: 120px;">Total</th>
+                                            <th style="width: 50px;"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <t t-foreach="state.products" t-as="product" t-key="product_index">
+                                            <tr>
+                                                <td class="ps-4">
+                                                    <div class="fw-500 text-dark" t-esc="product.name"/>
+                                                    <small class="text-muted" t-if="product.max_quantity">
+                                                        Max: <t t-esc="product.max_quantity"/>
+                                                    </small>
+                                                </td>
+                                                <td class="text-center">
+                                                     <div class="input-group input-group-sm">
+                                                        <input 
+                                                            type="number" 
+                                                            class="form-control text-center fw-bold"
+                                                            t-att-value="product.quantity"
+                                                            min="1"
+                                                            step="1"
+                                                            t-on-change="(ev) => this.updateQuantity(product_index, ev.target.value)"
+                                                        />
+                                                    </div>
+                                                </td>
+                                                <td class="text-end" t-esc="env.utils.formatCurrency(product.price_unit)"/>
+                                                <td class="text-end pe-4 fw-bold" t-esc="env.utils.formatCurrency(product.quantity * product.price_unit)"/>
+                                                <td class="text-end pe-3">
+                                                    <button class="btn btn-sm btn-light text-danger hover-danger" t-on-click="() => this.removeProduct(product_index)">
+                                                        <i class="fa fa-times"/>
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        </t>
+                                    </tbody>
+                                </table>
+                            </t>
+                        </div>
+
+                        <!-- Footer Totals -->
+                        <div class="border-top p-3 bg-light">
+                            <div class="row align-items-center">
+                                <div class="col-6">
+                                    <div class="text-muted small">Total Devolución</div>
+                                    <div class="h3 mb-0 fw-bold text-primary" t-esc="formattedTotal"/>
+                                </div>
+                                <div class="col-6 text-end">
+                                    <!-- Using footer slot for main buttons, but total is shown here -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
             
-            <!-- Dialog Footer Buttons -->
+            <!-- Dialog Footer Buttons (using slot) -->
             <t t-set-slot="footer">
-                <div class="d-flex gap-2 w-100 justify-content-end">
-                    <button 
-                        type="button" 
-                        class="btn btn-secondary btn-lg"
-                        t-on-click="cancel"
-                    >
+                <div class="d-flex justify-content-between w-100 align-items-center">
+                     <button type="button" class="btn btn-light" t-on-click="cancel">
                         Cancelar
                     </button>
-                    <button 
-                        type="button" 
-                        class="btn btn-primary btn-lg"
-                        t-att-disabled="!isValidReturn()"
-                        t-on-click="confirm"
-                    >
+                    <button type="button" class="btn btn-primary px-4 fw-bold shadow-sm" t-att-disabled="!isValidReturn()" t-on-click="confirm">
                         <i class="fa fa-check me-2"/>Confirmar Devolución
                     </button>
                 </div>

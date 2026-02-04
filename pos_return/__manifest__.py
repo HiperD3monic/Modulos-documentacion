@@ -1,13 +1,7 @@
 # -*- coding: utf-8 -*-
-# =============================================================================
-# MÓDULO: pos_return
-# VERSIÓN: 19.0.1.0.0
-# MIGRADO: De Odoo 18 a Odoo 19
-# FECHA MIGRACIÓN: 2026-02-01
-# =============================================================================
 {
     'name': 'POS Devoluciones',
-    'version': '19.0.1.0.0',  # ACTUALIZADO: v18 -> v19
+    'version': '19.0.1.0.0',
     'category': 'Point of Sale',
     'summary': 'Gestión de devoluciones de mercancía sin registro de venta',
     'description': """
@@ -28,15 +22,13 @@
     'author': 'dataliza',
     'website': 'https://www.dataliza.com',
     'depends': [
-        'point_of_sale',  # Módulo POS core - compatible v19
-        'stock',          # Módulo de inventario - compatible v19
+        'point_of_sale',
+        'stock',
     ],
     'data': [
         'security/ir.model.access.csv',
     ],
     'assets': {
-        # Bundle de assets del POS - sintaxis compatible v19
-        # En Odoo 19 sigue siendo 'point_of_sale._assets_pos'
         'point_of_sale._assets_pos': [
             'pos_return/static/src/**/*',
         ],

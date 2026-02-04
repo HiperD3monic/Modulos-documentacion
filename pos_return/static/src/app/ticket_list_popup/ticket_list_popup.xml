@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates id="template" xml:space="preserve">
+    <t t-name="pos_return.TicketListPopup">
+        <Dialog title="'Seleccionar Ticket'" size="'md'">
+            <div class="ticket-list-popup p-0">
+                <!-- Search Bar -->
+                <div class="p-2 border-bottom sticky-top bg-white" style="z-index: 1060;">
+                    <div class="input-group">
+                        <span class="input-group-text bg-white border-end-0">
+                            <i class="fa fa-search text-muted"/>
+                        </span>
+                        <input type="text" 
+                               class="form-control border-start-0" 
+                               placeholder="Buscar..." 
+                               t-model="state.searchQuery"
+                               autofocus="autofocus"/>
+                        
+                        <!-- Filter Dropdown -->
+                        <button class="btn btn-outline-secondary dropdown-toggle" type="button" t-on-click="toggleDropdown">
+                            <span t-if="state.searchFilter === 'all'">Todos</span>
+                            <span t-elif="state.searchFilter === 'ref'">Referencia</span>
+                            <span t-elif="state.searchFilter === 'date'">Fecha</span>
+                            <span t-elif="state.searchFilter === 'product'">Producto</span>
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end show shadow" t-if="state.dropdownOpen" style="display: block; position: absolute; right: 0; top: 100%; z-index: 1050;">
+                            <li><a class="dropdown-item" href="#" t-on-click="() => this.setFilter('all')">Todos</a></li>
+                            <li><a class="dropdown-item" href="#" t-on-click="() => this.setFilter('ref')">Referencia</a></li>
+                            <li><a class="dropdown-item" href="#" t-on-click="() => this.setFilter('date')">Fecha</a></li>
+                            <li><a class="dropdown-item" href="#" t-on-click="() => this.setFilter('product')">Producto</a></li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="list-group list-group-flush" style="max-height: 400px; overflow-y: auto;">
+                    <t t-if="filteredTickets.length === 0">
+                        <div class="p-4 text-center text-muted">
+                            <i class="fa fa-search-minus fa-2x mb-2"/>
+                            <div>No se encontraron tickets.</div>
+                        </div>
+                    </t>
+                    <t t-else="">
+                        <table class="table table-hover mb-0">
+                            <thead class="bg-light sticky-top" style="top: 0px;">
+                                <tr>
+                                    <th class="ps-3 py-2">Referencia</th>
+                                    <th class="py-2">Fecha</th>
+                                    <th class="pe-3 py-2 text-end">Total</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <t t-foreach="filteredTickets" t-as="ticket" t-key="ticket.id">
+                                    <tr t-on-click="() => this.toggleDetails(ticket)"
+                                        t-att-class="{'table-active': state.expandedTicketId === ticket.id}"
+                                        style="cursor: pointer;">
+                                        <td class="ps-3 py-2 fw-bold text-dark">
+                                            <i t-if="state.expandedTicketId === ticket.id" class="fa fa-caret-down me-1"/>
+                                            <i t-else="" class="fa fa-caret-right me-1 text-muted"/>
+                                            <t t-esc="ticket.pos_reference || ticket.name"/>
+                                        </td>
+                                        <td class="py-2 text-muted">
+                                            <t t-esc="ticket.date_order.split(' ')[0]"/>
+                                        </td>
+                                        <td class="pe-3 py-2 text-end">
+                                            <span class="badge bg-light text-dark border rounded-pill">
+                                                <t t-esc="env.utils.formatCurrency(ticket.amount_total)"/>
+                                            </span>
+                                        </td>
+                                    </tr>
+                                    <!-- Expanded Details Row -->
+                                    <tr t-if="state.expandedTicketId === ticket.id" class="bg-light">
+                                        <td colspan="3" class="p-3">
+                                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                                <span class="fw-bold small text-uppercase text-muted">Contenido del Ticket</span>
+                                                <button class="btn btn-primary btn-sm" t-on-click="() => this.selectTicket(ticket)">
+                                                    Seleccionar este Ticket <i class="fa fa-check ms-1"/>
+                                                </button>
+                                            </div>
+                                            <table class="table table-sm table-borderless bg-white rounded shadow-sm mb-0">
+                                                <thead class="text-muted small">
+                                                    <tr>
+                                                        <th class="ps-2">Producto</th>
+                                                        <th class="text-center">Cant.</th>
+                                                        <th class="text-end pe-2">Precio</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    <tr t-foreach="ticket.lines" t-as="line" t-key="line.id">
+                                                        <td class="ps-2 text-wrap">
+                                                            <t t-esc="line.name"/>
+                                                        </td>
+                                                        <td class="text-center">
+                                                            <t t-if="line.remaining_qty !== undefined">
+                                                                <span t-att-class="line.remaining_qty &lt; line.qty ? 'text-warning fw-bold' : ''">
+                                                                    <t t-esc="line.remaining_qty"/>
+                                                                </span>
+                                                                <small class="text-muted" t-if="line.remaining_qty &lt; line.qty">
+                                                                    / <t t-esc="line.qty"/>
+                                                                </small>
+                                                            </t>
+                                                            <t t-else="">
+                                                                <t t-esc="line.qty"/>
+                                                            </t>
+                                                        </td>
+                                                        <td class="text-end pe-2">
+                                                            <t t-esc="env.utils.formatCurrency(line.price_subtotal_incl)"/>
+                                                        </td>
+                                                    </tr>
+                                                </tbody>
+                                            </table>
+                                        </td>
+                                    </tr>
+                                </t>
+                            </tbody>
+                        </table>
+                    </t>
+                </div>
+            </div>
+            <t t-set-slot="footer">
+                <div class="d-flex justify-content-end w-100">
+                    <button class="btn btn-secondary" t-on-click="props.close">Cancelar</button>
+                </div>
+            </t>
+        </Dialog>
+    </t>
+</templates>
