@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <record id="mrp_production_form_view_inherit_restrictions" model="ir.ui.view">
+            <field name="name">mrp.production.form.inherit.restrictions</field>
+            <field name="model">mrp.production</field>
+            <field name="inherit_id" ref="mrp.mrp_production_form_view"/>
+            <field name="priority" eval="20"/>
+            <field name="arch" type="xml">
+                <!-- Add computed field for consumption edit permission - Visible for Debugging -->
+                <xpath expr="//field[@name='is_locked']" position="after">
+                    <field name="is_consumption_editable" string="Debug: Editable?" decoration-danger="not is_consumption_editable" decoration-success="is_consumption_editable"/>
+                </xpath>
+
+                <!-- 
+                    Override readonly condition for product_uom_qty (To Consume) field.
+                    Simplified logic: If user is authorized (is_consumption_editable), allow editing.
+                    Otherwise, force readonly.
+                -->
+                <xpath expr="//field[@name='move_raw_ids']//tree//field[@name='product_uom_qty'][1]" position="attributes">
+                    <attribute name="readonly">not parent.is_consumption_editable</attribute>
+                </xpath>
+                
+                <xpath expr="//field[@name='move_raw_ids']//tree//field[@name='product_uom_qty'][2]" position="attributes">
+                    <attribute name="readonly">not parent.is_consumption_editable</attribute>
+                </xpath>
+
+                <!-- 
+                    Override readonly condition for quantity (Consumed) field.
+                -->
+                <xpath expr="//field[@name='move_raw_ids']//tree//field[@name='quantity']" position="attributes">
+                    <attribute name="readonly">not parent.is_consumption_editable</attribute>
+                </xpath>
+            </field>
+        </record>
+    </data>
+</odoo>

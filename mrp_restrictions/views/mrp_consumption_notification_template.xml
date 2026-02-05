@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <template id="notification_consumption_change">
+            <div style="font-family: 'Lucida Grande', Helvetica, Arial, sans-serif; font-size: 13px; color: #555;">
+                <p style="margin-bottom: 8px;"><strong>🔔 Modificación en consumo de materiales</strong></p>
+                <div style="margin-bottom: 12px;">
+                    <ul style="list-style-type: none; padding-left: 0; margin: 0;">
+                        <li>• <b>Usuario:</b> <t t-out="user_name"/></li>
+                        <li>• <b>Orden:</b> <a t-att-href="production_url" style="color: #875A7B; text-decoration: none;"><t t-out="production_name"/></a></li>
+                    </ul>
+                </div>
+                <div style="background-color: #f9f9f9; padding: 10px; border-radius: 5px; border: 1px solid #e1e1e1;">
+                    <p style="margin: 0 0 8px 0; border-bottom: 1px solid #e1e1e1; padding-bottom: 5px;"><b>Cambios realizados:</b></p>
+                    <ul style="padding-left: 20px; margin: 0;">
+                        <t t-foreach="changes" t-as="item">
+                            <li style="margin-bottom: 8px;">
+                                <strong style="color: #333;"><t t-out="item['product']"/></strong>
+                                <ul style="padding-left: 20px; margin-top: 4px; color: #666;">
+                                    <t t-foreach="item['lines']" t-as="line">
+                                        <li>
+                                            <span t-out="line['label']"/>: 
+                                            <span style="color: #888; text-decoration: line-through;"><t t-out="line['old']"/></span> 
+                                            <span> &#8594; </span> 
+                                            <strong style="color: #008784;"><t t-out="line['new']"/></strong>
+                                        </li>
+                                    </t>
+                                </ul>
+                            </li>
+                        </t>
+                    </ul>
+                </div>
+            </div>
+        </template>
+    </data>
+</odoo>

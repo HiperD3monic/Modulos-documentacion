@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <record id="res_config_settings_view_form_mrp_restrictions" model="ir.ui.view">
+            <field name="name">res.config.settings.view.form.inherit.mrp.restrictions</field>
+            <field name="model">res.config.settings</field>
+            <field name="inherit_id" ref="mrp.res_config_settings_view_form"/>
+            <field name="priority" eval="40"/>
+            <field name="arch" type="xml">
+                <xpath expr="//block[@name='process_operations_setting_container']" position="inside">
+                    <!-- Authorized Employees for Consumption Editing -->
+                    <setting id="mrp_consumption_editors" 
+                             string="Control de Consumos" 
+                             help="Configurar empleados autorizados para modificar cantidades de consumo">
+                        <div class="content-group">
+                            <div class="row mt-2">
+                                <label for="allowed_consumption_editors" class="col-lg-4 o_light_label"/>
+                                <field name="allowed_consumption_editors" 
+                                       widget="many2many_tags" 
+                                       class="col-lg-8"
+                                       options="{'no_create': True}"/>
+                            </div>
+                            <div class="text-muted mt-1">
+                                Empleados que pueden modificar las cantidades "Por consumir" y "Consumido" en órdenes de fabricación
+                            </div>
+                        </div>
+                    </setting>
+                    
+                    <!-- Users to Notify on Consumption Changes -->
+                    <setting id="mrp_consumption_notifications" 
+                             string="Notificaciones de Consumo" 
+                             help="Configurar usuarios que recibirán alertas cuando se modifiquen consumos">
+                        <div class="content-group">
+                            <div class="row mt-2">
+                                <label for="consumption_change_notification_users" class="col-lg-4 o_light_label"/>
+                                <field name="consumption_change_notification_users" 
+                                       widget="many2many_tags" 
+                                       class="col-lg-8"
+                                       options="{'no_create': True}"/>
+                            </div>
+                            <div class="text-muted mt-1">
+                                Estos usuarios recibirán alertas cuando se modifiquen cantidades de consumo en las órdenes de fabricación
+                            </div>
+                        </div>
+                    </setting>
+                </xpath>
+            </field>
+        </record>
+    </data>
+</odoo>
