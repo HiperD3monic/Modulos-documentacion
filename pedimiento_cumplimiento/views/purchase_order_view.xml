@@ -1,0 +1,73 @@
+<?xml version='1.0' encoding='utf-8'?>
+<odoo>
+    <record id="purchase_order_view_form_inherit_pedimento" model="ir.ui.view">
+        <field name="name">purchase.order.view.form.inherit.pedimento</field>
+        <field name="model">purchase.order</field>
+        <field name="inherit_id" ref="purchase.purchase_order_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//group//group" position="inside">
+                <field name="pedimiento_id" invisible="1"/>
+                <field name="fiscal_country_codes" invisible="1"/>
+                <field name="l10n_mx_edi_customs_number"
+                       placeholder="15  48  3009  0001234"
+                       readonly="state != 'draft'"
+                       invisible="'MX' not in fiscal_country_codes"
+                />              
+            </xpath>
+
+
+
+            <div name="button_box" position="inside">
+                <button class="oe_stat_button"
+                        name="action_open_pedimiento"
+                        type="object"
+                        icon="fa-archive"
+                        invisible="not pedimiento_id">
+                    <div class="o_field_statinfo">
+                        <span class="o_stat_text">Pedimiento</span>
+                    </div>
+                </button>
+            </div>
+
+        </field>
+    </record>
+
+    <record id="purchase_order_view_tree_inherit_pedimento" model="ir.ui.view">
+        <field name="name">purchase.order.view.tree.inherit.pedimento</field>
+        <field name="model">purchase.order</field>
+        <field name="inherit_id" ref="purchase.purchase_order_tree"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='partner_id']" position="after">
+                <field name="l10n_mx_edi_customs_number" readonly="1"/>              
+            </xpath>
+        </field>
+    </record>
+
+    <!-- Inherit RFQ list view to add Validar Pedimentos button -->
+    <record id="purchase_order_kpis_tree_inherit_pedimento" model="ir.ui.view">
+        <field name="name">purchase.order.kpis.tree.inherit.pedimento</field>
+        <field name="model">purchase.order</field>
+        <field name="inherit_id" ref="purchase.purchase_order_kpis_tree"/>
+        <field name="arch" type="xml">
+            <xpath expr="//list/header" position="inside">
+                <button name="action_validate_pedimentos_bulk" 
+                        type="object" 
+                        string="Validate Pedimentos"/>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- Server action for bulk pedimento validation (appears in Action menu) -->
+    <record id="action_validate_pedimentos_bulk" model="ir.actions.server">
+        <field name="name">Validate Pedimentos</field>
+        <field name="model_id" ref="purchase.model_purchase_order"/>
+        <field name="binding_model_id" ref="purchase.model_purchase_order"/>
+        <field name="binding_view_types">list</field>
+        <field name="state">code</field>
+        <field name="code">
+if records:
+    action = records.action_validate_pedimentos_bulk()
+        </field>
+    </record>
+
+</odoo>
