@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- ================================================================== -->
+    <!-- VISTAS PARA WIZARDS DE PEDIMENTOS (Preview + Resultados)           -->
+    <!-- ================================================================== -->
+
+    <!-- ==================== WIZARD DE PREVIEW ==================== -->
+    <record id="pedimento_operation_wizard_view_form" model="ir.ui.view">
+        <field name="name">pedimento.operation.wizard.form</field>
+        <field name="model">pedimento.operation.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Vista Previa de Operación">
+                <sheet>
+                    <div class="oe_title">
+                        <h2>
+                            <span>Validación de Pedimentos</span>
+                        </h2>
+                    </div>
+
+                    <!-- Resumen de conteos -->
+                    <group>
+                        <group>
+                            <field name="operation_type" invisible="1"/>
+                            <field name="source_model" invisible="1"/>
+                            <field name="source_ids" invisible="1"/>
+                            <field name="total_count" string="Total de Registros"/>
+                            <field name="valid_count" string="Válidos para Procesar"/>
+                        </group>
+                        <group>
+                            <field name="invalid_count" string="Con Errores de Validación"/>
+                            <field name="can_proceed" invisible="1"/>
+                        </group>
+                    </group>
+
+                    <separator string="Detalle por Registro"/>
+
+                    <!-- Tabla HTML de preview con colores -->
+                    <field name="preview_html" nolabel="1"/>
+
+                    <!-- Mensaje de advertencia si no se puede proceder -->
+                    <div invisible="can_proceed" class="alert alert-danger" role="alert">
+                        <strong>⚠ No hay registros válidos para procesar.</strong>
+                        Revise los errores de validación en la tabla anterior.
+                    </div>
+
+                    <div invisible="not can_proceed or invalid_count == 0"
+                         class="alert alert-warning" role="alert">
+                        <strong>⚠ Algunos registros tienen errores de validación.</strong>
+                        Solo se procesarán los registros válidos. Los registros con errores serán omitidos.
+                    </div>
+                </sheet>
+                <footer>
+                    <button name="action_execute" string="Confirmar y Ejecutar"
+                            type="object" class="btn-primary"
+                            invisible="not can_proceed"
+                            confirm="¿Está seguro de ejecutar esta operación? Esta acción no se puede deshacer."/>
+                    <button name="action_cancel" string="Cancelar"
+                            type="object" class="btn-secondary"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <!-- ==================== WIZARD DE RESULTADOS ==================== -->
+    <record id="pedimento_operation_result_view_form" model="ir.ui.view">
+        <field name="name">pedimento.operation.result.form</field>
+        <field name="model">pedimento.operation.result</field>
+        <field name="arch" type="xml">
+            <form string="Resultados de la Operación">
+                <sheet>
+                    <div class="oe_title">
+                        <h2>
+                            <span invisible="operation_type != 'validacion'">
+                                Resultado - Validación de Pedimentos
+                            </span>
+                            <span invisible="operation_type != 'cambio_numero'">
+                                Resultado - Cambio de Número de Pedimento
+                            </span>
+                        </h2>
+                    </div>
+
+                    <!-- Resumen numérico -->
+                    <group>
+                        <group>
+                            <field name="operation_type" invisible="1"/>
+                            <field name="total_count" string="Total Procesados"/>
+                            <field name="success_count" string="Exitosos"/>
+                        </group>
+                        <group>
+                            <field name="error_count" string="Con Errores"/>
+                            <field name="skipped_count" string="Omitidos"/>
+                        </group>
+                    </group>
+
+                    <separator string="Detalle de Resultados"/>
+
+                    <!-- Tabla HTML de resultados con colores -->
+                    <field name="results_html" nolabel="1"/>
+                </sheet>
+                <footer>
+                    <button name="action_view_log" string="Ver Log de Auditoría"
+                            type="object" class="btn-primary"
+                            invisible="not log_id"/>
+                    <field name="log_id" invisible="1"/>
+                    <button name="action_close" string="Cerrar"
+                            type="object" class="btn-secondary"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+</odoo>

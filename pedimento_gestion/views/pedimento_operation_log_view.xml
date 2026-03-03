@@ -1,0 +1,166 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- ================================================================== -->
+    <!-- VISTAS PARA pedimento.operation.log - HISTORIAL DE OPERACIONES     -->
+    <!-- ================================================================== -->
+
+    <!-- ==================== VISTA TREE (LISTA) ==================== -->
+    <record id="pedimento_operation_log_view_tree" model="ir.ui.view">
+        <field name="name">pedimento.operation.log.list</field>
+        <field name="model">pedimento.operation.log</field>
+        <field name="arch" type="xml">
+            <list string="Historial de Operaciones"
+                  decoration-success="final_state == 'exito'"
+                  decoration-warning="final_state == 'parcial'"
+                  decoration-danger="final_state == 'fallo'"
+                  default_order="operation_date desc">
+                <field name="name" decoration-bf="1"/>
+                <field name="operation_date"/>
+                <field name="user_id" widget="many2one_avatar_user"/>
+                <field name="operation_type"/>
+                <field name="is_bulk"/>
+                <field name="affected_count"/>
+                <field name="success_count"/>
+                <field name="error_count"/>
+                <field name="skipped_count"/>
+                <field name="final_state" widget="badge"
+                       decoration-success="final_state == 'exito'"
+                       decoration-warning="final_state == 'parcial'"
+                       decoration-danger="final_state == 'fallo'"/>
+                <field name="execution_time" widget="float_time" optional="hide"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- ==================== VISTA FORM (FORMULARIO) ==================== -->
+    <record id="pedimento_operation_log_view_form" model="ir.ui.view">
+        <field name="name">pedimento.operation.log.form</field>
+        <field name="model">pedimento.operation.log</field>
+        <field name="arch" type="xml">
+            <form string="Detalle de Operación">
+                <sheet>
+                    <div class="oe_title">
+                        <h1>
+                            <field name="name"/>
+                        </h1>
+                    </div>
+                    <group>
+                        <group string="Información General">
+                            <field name="user_id"/>
+                            <field name="operation_date"/>
+                            <field name="operation_type"/>
+                            <field name="is_bulk"/>
+                        </group>
+                        <group string="Resultados">
+                            <field name="final_state" widget="badge"
+                                   decoration-success="final_state == 'exito'"
+                                   decoration-warning="final_state == 'parcial'"
+                                   decoration-danger="final_state == 'fallo'"/>
+                            <field name="affected_count"/>
+                            <field name="success_count"/>
+                            <field name="error_count"/>
+                            <field name="skipped_count"/>
+                            <field name="execution_time"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Detalles de la Operación" name="details">
+                            <field name="details_html"/>
+                        </page>
+                        <page string="Trazabilidad" name="traceability"
+                              invisible="not purchase_order_ids">
+                            <group string="Órdenes de Compra Afectadas">
+                                <field name="purchase_order_ids" nolabel="1" readonly="1">
+                                    <list create="0" delete="0" edit="0" duplicate="0">
+                                        <field name="name"/>
+                                        <field name="partner_id"/>
+                                        <field name="l10n_mx_edi_customs_number"/>
+                                        <field name="state"/>
+                                    </list>
+                                </field>
+                            </group>
+                        </page>
+                        <page string="Notas" name="notes">
+                            <field name="notes"/>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- ==================== VISTA SEARCH (BÚSQUEDA) ==================== -->
+    <record id="pedimento_operation_log_view_search" model="ir.ui.view">
+        <field name="name">pedimento.operation.log.search</field>
+        <field name="model">pedimento.operation.log</field>
+        <field name="arch" type="xml">
+            <search string="Buscar Operaciones">
+                <field name="name"/>
+                <field name="user_id"/>
+                <separator/>
+                <!-- Filtros por tiempo -->
+                <filter string="Hoy" name="today"
+                        domain="[('operation_date', '&gt;=', datetime.datetime.combine(context_today(), datetime.time(0, 0, 0)))]"/>
+                <filter string="Esta Semana" name="this_week"
+                        domain="[('operation_date', '&gt;=', (context_today() - datetime.timedelta(days=context_today().weekday())).strftime('%Y-%m-%d'))]"/>
+                <filter string="Este Mes" name="this_month"
+                        domain="[('operation_date', '&gt;=', context_today().strftime('%Y-%m-01'))]"/>
+                <separator/>
+                <!-- Filtros por tipo -->
+                <filter string="Validaciones" name="validaciones"
+                        domain="[('operation_type', '=', 'validacion')]"/>
+                <filter string="Cambios de Número" name="cambios_numero"
+                        domain="[('operation_type', '=', 'cambio_numero')]"/>
+                <separator/>
+                <!-- Filtros por estado -->
+                <filter string="Exitosas" name="exitosas"
+                        domain="[('final_state', '=', 'exito')]"/>
+                <filter string="Con Errores" name="con_errores"
+                        domain="[('final_state', 'in', ('parcial', 'fallo'))]"/>
+                <separator/>
+                <!-- Filtros por usuario -->
+                <filter string="Mis Operaciones" name="mis_operaciones"
+                        domain="[('user_id', '=', uid)]"/>
+                <separator/>
+                <!-- Agrupaciones -->
+                <group expand="0" string="Agrupar por">
+                    <filter string="Tipo de Operación" name="group_type"
+                            context="{'group_by': 'operation_type'}"/>
+                    <filter string="Estado Final" name="group_state"
+                            context="{'group_by': 'final_state'}"/>
+                    <filter string="Usuario" name="group_user"
+                            context="{'group_by': 'user_id'}"/>
+                    <filter string="Fecha" name="group_date"
+                            context="{'group_by': 'operation_date:month'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <!-- ==================== ACCIÓN DE VENTANA ==================== -->
+    <record id="action_pedimento_operation_log" model="ir.actions.act_window">
+        <field name="name">Historial de Pedimentos</field>
+        <field name="res_model">pedimento.operation.log</field>
+        <field name="view_mode">list,form</field>
+        <field name="context">{}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                No hay operaciones registradas aún
+            </p>
+            <p>
+                Aquí se registran todas las operaciones de validación y cambio
+                de número de pedimentos, incluyendo detalles de cada registro procesado.
+            </p>
+        </field>
+    </record>
+
+    <!-- ==================== MENÚ ==================== -->
+    <!-- Menú bajo Inventario > Operaciones > Historial de Pedimentos -->
+    <menuitem id="menu_pedimento_operation_log"
+              name="Historial de Pedimentos"
+              action="action_pedimento_operation_log"
+              parent="stock.menu_warehouse_report"
+              sequence="120"
+              groups="stock.group_stock_manager"/>
+
+</odoo>

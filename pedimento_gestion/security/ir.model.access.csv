@@ -1,0 +1,6 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_pedimento_operation_log_user,pedimento.operation.log.user,model_pedimento_operation_log,stock.group_stock_user,1,0,0,0
+access_pedimento_operation_log_manager,pedimento.operation.log.manager,model_pedimento_operation_log,stock.group_stock_manager,1,1,1,1
+access_pedimento_operation_wizard_user,pedimento.operation.wizard.user,model_pedimento_operation_wizard,stock.group_stock_user,1,1,1,1
+access_pedimento_operation_result_user,pedimento.operation.result.user,model_pedimento_operation_result,stock.group_stock_user,1,1,1,1
+access_pedimento_change_number_user,pedimento.change.number.user,model_pedimento_change_number,stock.group_stock_user,1,1,1,1

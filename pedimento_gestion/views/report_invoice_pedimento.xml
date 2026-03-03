@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ================================================================== -->
+    <!-- Reporte PDF Factura MX: Columna Pedimento + Ocultar inline          -->
+    <!-- ================================================================== -->
+
+    <!-- 1. Desactivar la sección inline "Customs:" / "Número de pedimento  -->
+    <!--    aduanal" que l10n_mx_edi_extended agrega en la descripción.      -->
+    <!--    NOTA: NO usamos position="replace" porque rompe xpaths de       -->
+    <!--    Studio (view 5758). Solo cambiamos el atributo t-if.            -->
+    <template id="report_invoice_hide_inline_customs"
+              inherit_id="l10n_mx_edi_extended.report_invoice_document">
+
+        <!-- Forzar custom_numbers = [] para que el t-if sea False -->
+        <xpath expr="//t[@t-set='custom_numbers']" position="attributes">
+            <attribute name="t-value">[]</attribute>
+        </xpath>
+
+    </template>
+
+    <!-- 2. Agregar columna dedicada "Pedimento" al reporte base            -->
+    <!--    (propaga automáticamente al reporte MX vía primary="True")      -->
+    <template id="report_invoice_document_pedimento"
+              inherit_id="account.report_invoice_document">
+
+        <!-- Agregar encabezado de columna "Pedimento" -->
+        <xpath expr="//table[@name='invoice_line_table']/thead//th[@name='th_description']" position="after">
+            <th name="th_pedimento" class="text-start"><span>Pedimento</span></th>
+        </xpath>
+
+        <!-- Agregar celda de datos "Pedimento" en cada línea -->
+        <xpath expr="//td[@name='account_invoice_line_name']" position="after">
+            <td name="td_pedimento" class="text-start">
+                <span t-if="line.l10n_mx_edi_customs_number"
+                      t-field="line.l10n_mx_edi_customs_number"/>
+            </td>
+        </xpath>
+
+    </template>
+
+</odoo>

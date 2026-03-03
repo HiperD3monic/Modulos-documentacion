@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- ================================================================== -->
+    <!-- WIZARD: Cambiar Número de Pedimento - Vista                        -->
+    <!-- ================================================================== -->
+
+    <record id="pedimento_change_number_view_form" model="ir.ui.view">
+        <field name="name">pedimento.change.number.form</field>
+        <field name="model">pedimento.change.number</field>
+        <field name="arch" type="xml">
+            <form string="Cambiar Número de Pedimento">
+                <sheet>
+                    <div class="oe_title">
+                        <h2>Cambiar Número de Pedimento</h2>
+                    </div>
+
+                    <group>
+                        <group string="Información Actual">
+                            <field name="landed_cost_id" readonly="1"/>
+                            <field name="current_number" readonly="1"/>
+                        </group>
+                        <group string="Nuevo Número">
+                            <field name="new_number" placeholder="YY  AA  PPPP  NNNNNNN"/>
+                        </group>
+                    </group>
+
+                    <separator string="Registros Afectados"/>
+
+                    <group>
+                        <field name="purchase_order_count" string="Órdenes de Compra"/>
+                        <field name="purchase_order_names" string="OCs Afectadas"/>
+                    </group>
+
+                    <div class="alert alert-info" role="alert">
+                        <strong>ℹ️ Información:</strong>
+                        Al cambiar el número de pedimento, se actualizará en:
+                        <ul>
+                            <li>El costo en destino seleccionado</li>
+                            <li>Todas las órdenes de compra vinculadas</li>
+                            <li>Las líneas de movimiento de stock relacionadas</li>
+                            <li>Las líneas de factura existentes con el número antiguo</li>
+                        </ul>
+                        Esta operación quedará registrada en el log de auditoría.
+                    </div>
+                </sheet>
+                <footer>
+                    <button name="action_change_number"
+                            string="Cambiar Número"
+                            type="object"
+                            class="btn-primary"
+                            confirm="¿Está seguro de cambiar el número de pedimento? Esta acción se registrará en el log de auditoría."/>
+                    <button string="Cancelar" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+</odoo>

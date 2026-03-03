@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Secuencia para el modelo de log de operaciones de pedimentos -->
+    <record id="seq_pedimento_operation_log" model="ir.sequence">
+        <field name="name">Historial de Operaciones de Pedimentos</field>
+        <field name="code">pedimento.operation.log</field>
+        <field name="prefix">LOG-</field>
+        <field name="padding">4</field>
+        <field name="number_next">1</field>
+        <field name="number_increment">1</field>
+    </record>
+</odoo>

@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- ================================================================== -->
+    <!-- EXTENSIONES DE VISTAS DE purchase.order                            -->
+    <!-- ================================================================== -->
+
+    <!-- ==================== FORMULARIO ==================== -->
+    <record model="ir.ui.view" id="view_purchase_order_form_pedimento_gestion">
+        <field name="name">purchase.order.form.pedimento.gestion</field>
+        <field name="model">purchase.order</field>
+        <field name="inherit_id" ref="purchase.purchase_order_form"/>
+        <field name="arch" type="xml">
+            <!-- Tarjetilla de pedimento en el button_box -->
+            <xpath expr="//div[@name='button_box']" position="before">
+                <widget name="web_ribbon" title="Revertido" bg_color="bg-danger" invisible="not is_reverted"/>
+            </xpath>
+            <xpath expr="//div[@name='button_box']" position="inside">
+                <button name="action_open_pedimiento"
+                        class="oe_stat_button"
+                        type="object"
+                        icon="fa-ship"
+                        invisible="not pedimiento_id or state in ('draft', 'sent', 'to approve')">
+                    <div class="o_stat_info">
+                        <span class="o_stat_text">Pedimento</span>
+                    </div>
+                </button>
+            </xpath>
+
+            <xpath expr="//div[@name='button_box']" position="inside">
+                <button name="action_view_pedimento_logs"
+                        class="oe_stat_button"
+                        icon="fa-history"
+                        type="object"
+                        invisible="pedimento_log_count == 0">
+                    <field name="pedimento_log_count" widget="statinfo" string="Logs Pedim."/>
+                </button>
+            </xpath>
+
+            <!-- Campo de número de pedimento -->
+            <xpath expr="//field[@name='partner_ref']" position="after">
+                <field name="fiscal_country_codes" invisible="1"/>
+                <field name="l10n_mx_edi_customs_number"
+                       invisible="fiscal_country_codes != 'MX'"
+                       readonly="is_reverted or pedimiento_id"
+                       placeholder="YY  AA  PPPP  NNNNNNN"/>
+                <field name="pedimiento_id" invisible="1"/>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- ==================== LISTA RFQs (purchase_order_kpis_tree): botón masivo ==================== -->
+    <record model="ir.ui.view" id="view_purchase_order_kpis_tree_pedimento_gestion">
+        <field name="name">purchase.order.kpis.list.pedimento.gestion</field>
+        <field name="model">purchase.order</field>
+        <field name="inherit_id" ref="purchase.purchase_order_kpis_tree"/>
+        <field name="arch" type="xml">
+            <!-- Agregar campo de pedimento en la lista -->
+            <xpath expr="//list" position="attributes">
+                <attribute name="decoration-danger">is_reverted</attribute>
+            </xpath>
+            <xpath expr="//field[@name='invoice_status']" position="before">
+                <field name="is_reverted" invisible="1"/>
+                <field name="l10n_mx_edi_customs_number"
+                       string="Pedimento" optional="show"/>
+            </xpath>
+
+            <!-- Agregar botón masivo en el header existente -->
+            <xpath expr="//list/header" position="inside">
+                <button name="action_validate_pedimentos_bulk"
+                        type="object"
+                        string="Validar Pedimentos"/>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- ==================== LISTA POs (purchase_order_view_tree): botón masivo ==================== -->
+    <record model="ir.ui.view" id="view_purchase_order_tree_pedimento_gestion">
+        <field name="name">purchase.order.list.pedimento.gestion</field>
+        <field name="model">purchase.order</field>
+        <field name="inherit_id" ref="purchase.purchase_order_view_tree"/>
+        <field name="arch" type="xml">
+            <!-- Agregar campo de pedimento en la lista -->
+            <xpath expr="//list" position="attributes">
+                <attribute name="decoration-danger">is_reverted</attribute>
+            </xpath>
+            <xpath expr="//field[@name='invoice_status']" position="before">
+                <field name="is_reverted" invisible="1"/>
+                <field name="l10n_mx_edi_customs_number"
+                       string="Pedimento" optional="show"/>
+            </xpath>
+
+            <!-- Agregar botón masivo en el header existente -->
+            <xpath expr="//list/header" position="inside">
+                <button name="action_validate_pedimentos_bulk"
+                        type="object"
+                        string="Validar Pedimentos"/>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- ==================== ACCIÓN DE SERVIDOR ==================== -->
+    <!-- Acción de servidor para validación masiva desde menú de contexto -->
+    <record id="action_validate_pedimentos_gestion" model="ir.actions.server">
+        <field name="name">Validar Pedimentos Seleccionados</field>
+        <field name="model_id" ref="purchase.model_purchase_order"/>
+        <field name="binding_model_id" ref="purchase.model_purchase_order"/>
+        <field name="binding_view_types">list</field>
+        <field name="state">code</field>
+        <field name="code">
+            if records:
+                action = records.action_validate_pedimentos_bulk()
+        </field>
+    </record>
+
+</odoo>

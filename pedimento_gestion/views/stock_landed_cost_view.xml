@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- ================================================================== -->
+    <!-- EXTENSIONES DE VISTAS DE stock.landed.cost                         -->
+    <!-- ================================================================== -->
+
+    <!-- ==================== FORMULARIO: Botón Cambiar Pedimento ==================== -->
+    <record model="ir.ui.view" id="view_stock_landed_cost_form_change_number">
+        <field name="name">stock.landed.cost.form.change.number</field>
+        <field name="model">stock.landed.cost</field>
+        <field name="inherit_id" ref="stock_landed_costs.view_stock_landed_cost_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//header" position="inside">
+                <button name="action_change_pedimento_number"
+                        string="Cambiar Pedimento"
+                        type="object"
+                        class="btn-secondary"
+                        invisible="not l10n_mx_edi_customs_number or context.get('hide_change_button', False)"/>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- ==================== LISTA: Badge de estado ==================== -->
+    <record model="ir.ui.view" id="view_stock_landed_cost_tree_pedimento_gestion">
+        <field name="name">stock.landed.cost.list.pedimento.gestion</field>
+        <field name="model">stock.landed.cost</field>
+        <field name="inherit_id" ref="stock_landed_costs.view_stock_landed_cost_tree"/>
+        <field name="arch" type="xml">
+            <!-- Agregar campo de estado de pedimento con badge -->
+            <xpath expr="//field[@name='state']" position="after">
+                <field name="pedimento_state_display"
+                       string="Pedimento"
+                       widget="badge"
+                       decoration-success="pedimento_state_display == 'validado'"
+                       decoration-info="pedimento_state_display == 'borrador'"
+                       decoration-danger="pedimento_state_display == 'cancelado'"
+                       decoration-muted="pedimento_state_display == 'sin_pedimento'"
+                       optional="show"/>
+            </xpath>
+        </field>
+    </record>
+
+</odoo>
