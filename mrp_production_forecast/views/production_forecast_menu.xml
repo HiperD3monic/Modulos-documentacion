@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Acción de cliente para el Pronóstico de Producción -->
+    <record id="action_production_forecast_client" model="ir.actions.client">
+        <field name="name">Pronóstico de Producción</field>
+        <field name="tag">production_forecast</field>
+    </record>
+
+    <!-- Menú bajo Manufactura > Reportes -->
+    <menuitem id="menu_production_forecast_client"
+              name="Pronóstico de Producción"
+              action="action_production_forecast_client"
+              parent="mrp.menu_mrp_reporting"
+              sequence="40"
+              groups="mrp.group_mrp_user"/>
+</odoo>

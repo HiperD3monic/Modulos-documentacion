@@ -1,0 +1,185 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+
+    <div t-name="mrp_production_forecast.ProductionForecast" class="o_action pf-main-container">
+
+        <!-- Panel de Control -->
+        <ForecastControlPanel
+            mode="state.mode"
+            productId="state.productId"
+            productName="state.productName"
+            isLoading="state.isLoading"
+            hasData="state.hasData"
+            maxProducible="state.forecastData.max_producible_qty or 0"
+            changeProduct.bind="onChangeProduct"
+            changeMode.bind="onChangeMode"
+            clickExport.bind="onClickExport"
+            clickCreateMO.bind="onClickCreateMO"
+        />
+
+        <!-- Estado de carga -->
+        <div t-if="state.isLoading" class="pf-loading text-center py-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Calculando...</span>
+            </div>
+            <p class="mt-3 text-muted">Calculando pronóstico de producción...</p>
+        </div>
+
+        <!-- Placeholder si no hay producto seleccionado -->
+        <div t-if="!state.productId and !state.isLoading" class="pf-empty-state text-center py-5">
+            <div class="pf-empty-icon mb-4">
+                <i class="fa fa-industry fa-4x text-muted opacity-50"></i>
+            </div>
+            <h3 class="text-muted">Seleccione un producto para comenzar</h3>
+            <p class="text-muted">
+                Utilice el buscador superior para seleccionar un producto con Lista de Materiales
+                y calcular la cantidad máxima fabricable.
+            </p>
+        </div>
+
+        <!-- Contenido principal (cuando hay datos) -->
+        <div t-if="state.hasData and !state.isLoading" class="pf-content-area">
+            <div class="row g-4 mx-0">
+
+                <!-- Panel izquierdo (componentes + log) -->
+                <div class="col-lg-8 col-xl-8">
+                    <!-- Tabla de componentes base -->
+                    <div class="pf-table-scroll-wrapper">
+                        <ForecastComponentsTable
+                            components="state.forecastData.components"
+                            mode="state.mode"
+                        />
+                    </div>
+
+                    <!-- Sección de productos intermedios (colapsable) -->
+                    <ForecastIntermediatesSection
+                        t-if="state.forecastData.intermediates and state.forecastData.intermediates.length"
+                        intermediates="state.forecastData.intermediates"
+                        isExpanded="state.showIntermediates"
+                        toggleExpand.bind="onToggleIntermediates"
+                    />
+
+                    <!-- Log interactivo -->
+                    <div class="pf-log-section mt-3">
+                        <div class="pf-log-toggle" t-on-click="onToggleLog">
+                            <div class="d-flex align-items-center">
+                                <i t-attf-class="fa fa-chevron-{{ state.showLog ? 'up' : 'down' }} me-2 pf-log-chevron"/>
+                                <i class="fa fa-sitemap me-2 text-primary"/>
+                                <span class="fw-semibold">Árbol de Explosión y Detalle del Cálculo</span>
+                            </div>
+                            <small class="text-muted">
+                                <t t-if="state.forecastData.log_entries">
+                                    <t t-esc="state.forecastData.log_entries.length"/> entradas
+                                </t>
+                            </small>
+                        </div>
+
+                        <div t-if="state.showLog" class="pf-log-tree-container">
+                            <!-- Entradas del árbol estructurado -->
+                            <t t-if="state.forecastData.log_entries and state.forecastData.log_entries.length">
+                                <t t-foreach="state.forecastData.log_entries" t-as="entry" t-key="entry_index">
+
+                                    <!-- Explosion entry -->
+                                    <div t-if="entry.type === 'explosion'"
+                                         t-attf-class="pf-tree-node pf-tree-level-{{ entry.indent }}"
+                                         t-attf-style="margin-left: {{ entry.indent * 28 }}px;">
+                                        
+                                        <!-- Conector L para sub-niveles -->
+                                        <div t-if="entry.indent > 0" class="pf-tree-connector"/>
+
+                                        <div class="pf-node-card">
+                                            <div t-attf-class="pf-node-icon pf-icon-{{ entry.color }}">
+                                                <i t-attf-class="fa {{ entry.icon }}"/>
+                                            </div>
+                                            <div class="pf-node-details">
+                                                <div t-attf-class="pf-node-title {{ entry.product_id ? 'pf-clickable-product' : '' }}"
+                                                     t-on-click="() => this.onClickLogEntry(entry.product_id)"
+                                                     t-att-title="entry.product_id ? 'Abrir producto' : ''">
+                                                    <i t-if="entry.product_id" class="fa fa-external-link-square me-1 pf-link-icon"/>
+                                                    <t t-esc="entry.text"/>
+                                                </div>
+                                                <div class="pf-node-meta">
+                                                    <span class="pf-node-qty">
+                                                        <t t-esc="entry.qty_text"/>
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Warning entry -->
+                                    <div t-if="entry.type === 'warning'"
+                                         t-attf-class="pf-tree-node pf-tree-level-{{ entry.indent }}"
+                                         t-attf-style="margin-left: {{ entry.indent * 28 }}px;">
+                                        <div t-if="entry.indent > 0" class="pf-tree-connector"/>
+                                        <div class="pf-node-card border-danger">
+                                            <div class="pf-node-icon pf-icon-danger">
+                                                <i t-attf-class="fa {{ entry.icon }}"/>
+                                            </div>
+                                            <div class="pf-node-details">
+                                                <div t-attf-class="pf-node-title text-danger {{ entry.product_id ? 'pf-clickable-product' : '' }}"
+                                                     t-on-click="() => this.onClickLogEntry(entry.product_id)"
+                                                     t-att-title="entry.product_id ? 'Abrir producto' : ''">
+                                                    <i t-if="entry.product_id" class="fa fa-external-link-square me-1 pf-link-icon"/>
+                                                    <t t-esc="entry.text"/>
+                                                </div>
+                                                <div t-if="entry.detail" class="pf-node-meta text-danger">
+                                                    <t t-esc="entry.detail"/>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Component result entry -->
+                                    <div t-if="entry.type === 'component_result'" class="pf-tree-node mt-3">
+                                        <div t-attf-class="pf-node-card pf-result-card-{{ entry.status }}">
+                                            <div t-attf-class="pf-node-icon pf-icon-{{ entry.color }}">
+                                                <i t-attf-class="fa {{ entry.icon }}"/>
+                                            </div>
+                                            <div class="pf-node-details d-flex align-items-center justify-content-between flex-wrap gap-2">
+                                                <div>
+                                                    <div t-attf-class="pf-node-title {{ entry.product_id ? 'pf-clickable-product' : '' }}"
+                                                         t-on-click="() => this.onClickLogEntry(entry.product_id)"
+                                                         t-att-title="entry.product_id ? 'Abrir producto' : ''">
+                                                        <i t-if="entry.product_id" class="fa fa-external-link-square me-1 pf-link-icon"/>
+                                                        <t t-esc="entry.text"/>
+                                                    </div>
+                                                    <div t-if="entry.detail" class="pf-node-meta mt-1">
+                                                        <t t-esc="entry.detail"/>
+                                                    </div>
+                                                </div>
+                                                <span t-if="entry.status_label"
+                                                      t-attf-class="badge rounded-pill pf-status-badge pf-badge-{{ entry.status }} fs-6 px-3 py-2">
+                                                    <t t-esc="entry.status_label"/>
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                </t>
+                            </t>
+
+                            <!-- Fallback: texto plano -->
+                            <div t-if="!state.forecastData.log_entries or !state.forecastData.log_entries.length"
+                                 class="pf-log-fallback">
+                                <pre class="pf-log-pre"><t t-esc="state.forecastData.computation_log"/></pre>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Panel derecho (resultado) -->
+                <div class="col-lg-4 col-xl-4">
+                    <ForecastResultCard
+                        maxProducible="state.forecastData.max_producible_qty"
+                        modeLabel="modeLabel"
+                        product="state.forecastData.product"
+                        limitingComponent="state.forecastData.limiting_component"
+                        components="state.forecastData.components"
+                    />
+                </div>
+            </div>
+        </div>
+    </div>
+
+</templates>

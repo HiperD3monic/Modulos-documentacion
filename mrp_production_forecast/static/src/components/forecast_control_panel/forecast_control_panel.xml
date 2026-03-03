@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+
+    <t t-name="mrp_production_forecast.ForecastControlPanel">
+        <div class="pf-control-panel">
+            <div class="pf-cp-inner d-flex flex-wrap align-items-center gap-3 p-3">
+
+                <!-- Buscador de producto -->
+                <div class="pf-search-container position-relative flex-grow-1" style="min-width: 280px; max-width: 450px;">
+                    <div class="input-group">
+                        <span class="input-group-text pf-search-icon">
+                            <i class="fa fa-search"/>
+                        </span>
+                        <input type="text"
+                               class="form-control pf-search-input"
+                               placeholder="Buscar producto con BoM..."
+                               t-att-value="searchState.selectedName"
+                               t-on-input="onSearchInput"
+                               t-on-focus="onSearchFocus"
+                               t-on-blur="onSearchBlur"
+                               t-on-keydown="onSearchKeydown"
+                        />
+                        <button t-if="props.productId"
+                                class="btn btn-outline-secondary pf-clear-btn"
+                                t-on-click="onClearProduct"
+                                title="Limpiar selección">
+                            <i class="fa fa-times"/>
+                        </button>
+                    </div>
+                    <!-- Dropdown de sugerencias -->
+                    <div t-if="searchState.showSuggestions"
+                         class="pf-suggestions-dropdown">
+                        <div t-foreach="searchState.suggestions" t-as="product" t-key="product.id"
+                             class="pf-suggestion-item"
+                             t-on-click="() => this.onSelectProduct(product)">
+                            <div class="pf-suggestion-name">
+                                <t t-esc="product.name"/>
+                            </div>
+                            <div t-if="product.default_code" class="pf-suggestion-code">
+                                <small class="text-muted"><t t-esc="product.default_code"/></small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Toggle pill-buttons (modo) -->
+                <div class="pf-mode-toggle btn-group" role="group">
+                    <button t-attf-class="btn pf-mode-btn {{ props.mode === 'on_hand' ? 'pf-mode-active' : 'pf-mode-inactive' }}"
+                            t-on-click="onClickOnHand"
+                            t-att-disabled="props.isLoading">
+                        <i class="fa fa-cube me-1"/>
+                        Stock En Mano
+                    </button>
+                    <button t-attf-class="btn pf-mode-btn {{ props.mode === 'forecasted' ? 'pf-mode-active' : 'pf-mode-inactive' }}"
+                            t-on-click="onClickForecasted"
+                            t-att-disabled="props.isLoading">
+                        <i class="fa fa-line-chart me-1"/>
+                        Pronosticado
+                    </button>
+                </div>
+
+                <!-- Botones de acción -->
+                <div class="pf-action-buttons d-flex gap-2 ms-auto">
+                    <button t-if="props.hasData"
+                            class="btn pf-btn-export"
+                            t-on-click="props.clickExport"
+                            t-att-disabled="props.isLoading"
+                            title="Exportar a Excel">
+                        <i class="fa fa-file-excel-o me-1"/>
+                        Excel
+                    </button>
+                    <button t-if="props.hasData and props.maxProducible > 0"
+                            class="btn pf-btn-create-mo"
+                            t-on-click="props.clickCreateMO"
+                            t-att-disabled="props.isLoading"
+                            title="Crear Orden de Manufactura">
+                        <i class="fa fa-wrench me-1"/>
+                        Crear OM
+                    </button>
+                </div>
+            </div>
+        </div>
+    </t>
+
+</templates>
