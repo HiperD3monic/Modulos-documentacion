@@ -1,0 +1,899 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   Pronóstico de Producción — Estilos CSS
+   Módulo: mrp_production_forecast
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* ── Variables ── */
+:root {
+    --pf-primary: #4a90d9;
+    --pf-primary-dark: #2d6cb4;
+    --pf-success: #28a745;
+    --pf-success-light: #d4edda;
+    --pf-success-dark: #155724;
+    --pf-warning: #ffc107;
+    --pf-warning-light: #fff3cd;
+    --pf-warning-dark: #856404;
+    --pf-danger: #dc3545;
+    --pf-danger-light: #f8d7da;
+    --pf-danger-dark: #721c24;
+    --pf-bg-card: #ffffff;
+    --pf-bg-body: #f4f6f9;
+    --pf-border: #dee2e6;
+    --pf-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    --pf-shadow-hover: 0 4px 16px rgba(0, 0, 0, 0.12);
+    --pf-radius: 10px;
+    --pf-radius-sm: 6px;
+    --pf-transition: all 0.25s ease;
+}
+
+/* ── Layout Principal ── */
+.pf-main-container {
+    background: var(--pf-bg-body);
+    min-height: 100%;
+    height: 100%;
+    overflow-y: auto;
+    padding-bottom: 2rem;
+}
+
+.pf-main-container.o_action {
+    overflow-y: auto !important;
+    max-height: 100vh;
+}
+
+.pf-content-area {
+    padding: 1rem 1.5rem;
+}
+
+/* ── Panel de Control ── */
+.pf-control-panel {
+    background: var(--pf-bg-card);
+    border-bottom: 1px solid var(--pf-border);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.pf-cp-inner {
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
+/* ── Buscador  ── */
+.pf-search-container .pf-search-icon {
+    background: linear-gradient(135deg, var(--pf-primary), var(--pf-primary-dark));
+    color: #fff;
+    border: none;
+    border-radius: var(--pf-radius-sm) 0 0 var(--pf-radius-sm);
+}
+
+.pf-search-input {
+    border-left: none;
+    font-size: 0.95rem;
+    padding: 0.55rem 0.75rem;
+    transition: var(--pf-transition);
+}
+
+.pf-search-input:focus {
+    box-shadow: 0 0 0 3px rgba(74, 144, 217, 0.15);
+    border-color: var(--pf-primary);
+}
+
+.pf-clear-btn {
+    border-color: var(--pf-border);
+    color: #6c757d;
+}
+
+.pf-clear-btn:hover {
+    background: #f8f9fa;
+    color: var(--pf-danger);
+}
+
+/* Dropdown de sugerencias */
+.pf-suggestions-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: var(--pf-bg-card);
+    border: 1px solid var(--pf-border);
+    border-top: none;
+    border-radius: 0 0 var(--pf-radius-sm) var(--pf-radius-sm);
+    box-shadow: var(--pf-shadow-hover);
+    max-height: 280px;
+    overflow-y: auto;
+    z-index: 100;
+}
+
+.pf-suggestion-item {
+    padding: 0.6rem 1rem;
+    cursor: pointer;
+    border-bottom: 1px solid #f1f3f5;
+    transition: var(--pf-transition);
+}
+
+.pf-suggestion-item:hover {
+    background: linear-gradient(135deg, rgba(74, 144, 217, 0.06), rgba(74, 144, 217, 0.02));
+}
+
+.pf-suggestion-item:last-child {
+    border-bottom: none;
+}
+
+.pf-suggestion-name {
+    font-weight: 500;
+    color: #343a40;
+}
+
+.pf-suggestion-code {
+    font-size: 0.8rem;
+}
+
+/* ── Toggle Modo (Pill Buttons) ── */
+.pf-mode-toggle {
+    border-radius: 50px;
+    overflow: hidden;
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.pf-mode-btn {
+    padding: 0.5rem 1.2rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    border: none;
+    transition: var(--pf-transition);
+    letter-spacing: 0.2px;
+}
+
+.pf-mode-active {
+    background: linear-gradient(135deg, var(--pf-primary), var(--pf-primary-dark));
+    color: #fff !important;
+    box-shadow: 0 2px 6px rgba(74, 144, 217, 0.3);
+}
+
+.pf-mode-inactive {
+    background: #e9ecef;
+    color: #6c757d;
+}
+
+.pf-mode-inactive:hover {
+    background: #dee2e6;
+    color: #495057;
+}
+
+/* ── Botones de Acción ── */
+.pf-btn-export {
+    background: var(--pf-success);
+    color: #fff;
+    border: none;
+    border-radius: var(--pf-radius-sm);
+    font-weight: 500;
+    font-size: 0.85rem;
+    padding: 0.5rem 1rem;
+    transition: var(--pf-transition);
+}
+
+.pf-btn-export:hover {
+    background: #218838;
+    color: #fff;
+    transform: translateY(-1px);
+    box-shadow: 0 3px 8px rgba(40, 167, 69, 0.3);
+}
+
+.pf-btn-create-mo {
+    background: linear-gradient(135deg, var(--pf-primary), var(--pf-primary-dark));
+    color: #fff;
+    border: none;
+    border-radius: var(--pf-radius-sm);
+    font-weight: 500;
+    font-size: 0.85rem;
+    padding: 0.5rem 1rem;
+    transition: var(--pf-transition);
+}
+
+.pf-btn-create-mo:hover {
+    background: linear-gradient(135deg, var(--pf-primary-dark), #1e5a9a);
+    color: #fff;
+    transform: translateY(-1px);
+    box-shadow: 0 3px 8px rgba(74, 144, 217, 0.3);
+}
+
+/* ── Estado vacío ── */
+.pf-empty-state {
+    max-width: 500px;
+    margin: 3rem auto;
+}
+
+.pf-empty-icon {
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #e9ecef, #f8f9fa);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* ── Estado de carga ── */
+.pf-loading {
+    margin: 3rem auto;
+}
+
+.pf-loading .spinner-border {
+    width: 3rem;
+    height: 3rem;
+}
+
+/* ── Card genérica ── */
+.pf-components-card,
+.pf-intermediates-card {
+    background: var(--pf-bg-card);
+    border-radius: var(--pf-radius);
+    box-shadow: var(--pf-shadow);
+    overflow: hidden;
+    transition: var(--pf-transition);
+}
+
+.pf-components-card:hover,
+.pf-intermediates-card:hover {
+    box-shadow: var(--pf-shadow-hover);
+}
+
+.pf-card-header {
+    padding: 1rem 1.25rem;
+    background: linear-gradient(135deg, #f8f9fa, #fff);
+    border-bottom: 1px solid var(--pf-border);
+}
+
+.pf-card-header h5 {
+    color: #343a40;
+    font-size: 1rem;
+}
+
+.pf-component-count,
+.pf-intermediate-count {
+    color: #6c757d;
+    font-weight: 400;
+    font-size: 0.85rem;
+}
+
+/* ── Tabla de Componentes ── */
+.pf-components-table {
+    font-size: 0.9rem;
+}
+
+.pf-th {
+    background: #f8f9fa;
+    font-weight: 600;
+    color: #495057;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 0.65rem 0.75rem;
+    border-bottom: 2px solid var(--pf-border);
+    white-space: nowrap;
+}
+
+.pf-td {
+    padding: 0.65rem 0.75rem;
+    vertical-align: middle;
+    border-bottom: 1px solid #f1f3f5;
+}
+
+.pf-comp-name {
+    font-weight: 500;
+    color: #343a40;
+}
+
+/* Nombres de producto clickeables */
+.pf-clickable-product {
+    cursor: pointer;
+    transition: var(--pf-transition);
+}
+
+.pf-clickable-product:hover {
+    color: var(--pf-primary);
+}
+
+.pf-link-icon {
+    font-size: 0.7rem;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    color: var(--pf-primary);
+}
+
+.pf-clickable-product:hover .pf-link-icon {
+    opacity: 1;
+}
+
+.pf-number {
+    font-family: "Roboto Mono", "Courier New", monospace;
+    font-size: 0.9rem;
+}
+
+.pf-producible-number {
+    font-family: "Roboto Mono", "Courier New", monospace;
+    font-size: 0.95rem;
+}
+
+/* Filas coloreadas según estado */
+.pf-comp-row {
+    transition: var(--pf-transition);
+}
+
+.pf-comp-row:hover {
+    background: rgba(0, 0, 0, 0.02);
+}
+
+.pf-comp-row-red {
+    border-left: 3px solid var(--pf-danger);
+}
+
+.pf-comp-row-yellow {
+    border-left: 3px solid var(--pf-warning);
+}
+
+.pf-comp-row-green {
+    border-left: 3px solid var(--pf-success);
+}
+
+/* ── Badges semáforo ── */
+.pf-status-badge {
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.35rem 0.65rem;
+    border-radius: 50px;
+    letter-spacing: 0.3px;
+}
+
+.pf-badge-green {
+    background: var(--pf-success-light);
+    color: var(--pf-success-dark);
+}
+
+.pf-badge-yellow {
+    background: var(--pf-warning-light);
+    color: var(--pf-warning-dark);
+}
+
+.pf-badge-red {
+    background: var(--pf-danger-light);
+    color: var(--pf-danger-dark);
+}
+
+/* ── Sección Intermedios ── */
+.pf-intermediates-header {
+    padding: 0.85rem 1.25rem;
+    cursor: pointer;
+    transition: var(--pf-transition);
+    user-select: none;
+}
+
+.pf-intermediates-header:hover {
+    background: #f8f9fa;
+}
+
+.pf-collapse-icon {
+    transition: transform 0.3s ease;
+    font-size: 0.75rem;
+    color: #6c757d;
+}
+
+.pf-intermediates-body {
+    border-top: 1px solid var(--pf-border);
+    animation: pf-slideDown 0.3s ease;
+}
+
+.pf-intermediates-table {
+    font-size: 0.85rem;
+}
+
+.pf-inter-row {
+    transition: var(--pf-transition);
+}
+
+.pf-inter-row:hover {
+    background: rgba(0, 0, 0, 0.02);
+}
+
+/* ── Card de Resultado ── */
+.pf-result-card-wrapper {
+    position: sticky;
+    top: 80px;
+}
+
+.pf-result-card {
+    border-radius: var(--pf-radius);
+    padding: 2rem 1.5rem;
+    text-align: center;
+    box-shadow: var(--pf-shadow);
+    transition: var(--pf-transition);
+    position: relative;
+    overflow: hidden;
+}
+
+.pf-result-card::before {
+    content: "";
+    position: absolute;
+    top: -50%;
+    right: -50%;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    opacity: 0.03;
+    background: radial-gradient(circle, #fff, transparent);
+}
+
+.pf-result-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--pf-shadow-hover);
+}
+
+.pf-result-success {
+    background: linear-gradient(135deg, #1a8c3f, #28a745);
+    color: #fff;
+}
+
+.pf-result-warning {
+    background: linear-gradient(135deg, #d4a017, #f0ad4e);
+    color: #fff;
+}
+
+.pf-result-danger {
+    background: linear-gradient(135deg, #b82a3a, #dc3545);
+    color: #fff;
+}
+
+.pf-result-icon {
+    font-size: 2.5rem;
+    margin-bottom: 0.5rem;
+    opacity: 0.85;
+}
+
+.pf-result-label {
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    opacity: 0.9;
+    margin-bottom: 0.25rem;
+}
+
+.pf-result-number {
+    font-size: 3.5rem;
+    font-weight: 800;
+    line-height: 1.1;
+    margin-bottom: 0.5rem;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+}
+
+.pf-result-product {
+    font-size: 0.9rem;
+    opacity: 0.9;
+    margin-bottom: 0.75rem;
+}
+
+.pf-result-mode {
+    font-size: 0.8rem;
+    opacity: 0.75;
+    padding-top: 0.5rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+/* ── Stock Info del Producto ── */
+.pf-stock-info-card {
+    background: var(--pf-bg-card);
+    border-radius: var(--pf-radius);
+    box-shadow: var(--pf-shadow);
+    overflow: hidden;
+    border-left: 4px solid var(--pf-primary);
+}
+
+.pf-stock-info-header {
+    padding: 0.65rem 1rem;
+    font-weight: 600;
+    font-size: 0.85rem;
+    color: #495057;
+    background: #f0f4f8;
+    border-bottom: 1px solid var(--pf-border);
+}
+
+.pf-stock-info-body {
+    padding: 0.75rem 1rem;
+}
+
+.pf-stock-info-row {
+    display: flex;
+    align-items: center;
+    gap: 0;
+}
+
+.pf-stock-info-item {
+    flex: 1;
+    text-align: center;
+}
+
+.pf-stock-info-label {
+    display: block;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #6c757d;
+    margin-bottom: 0.15rem;
+}
+
+.pf-stock-info-value {
+    display: block;
+    font-size: 1.4rem;
+    font-weight: 800;
+    color: #343a40;
+    line-height: 1.2;
+}
+
+.pf-stock-info-uom {
+    display: block;
+    font-size: 0.72rem;
+    color: #868e96;
+    margin-top: 1px;
+}
+
+.pf-stock-info-divider {
+    width: 1px;
+    height: 48px;
+    background: var(--pf-border);
+    flex-shrink: 0;
+    margin: 0 0.5rem;
+}
+
+/* ── Componente Limitante ── */
+.pf-limiting-card {
+    background: var(--pf-bg-card);
+    border-radius: var(--pf-radius);
+    box-shadow: var(--pf-shadow);
+    overflow: hidden;
+    border-left: 4px solid var(--pf-danger);
+}
+
+.pf-limiting-header {
+    padding: 0.75rem 1rem;
+    background: var(--pf-danger-light);
+    font-weight: 600;
+    font-size: 0.85rem;
+    color: var(--pf-danger-dark);
+}
+
+.pf-limiting-body {
+    padding: 1rem;
+}
+
+.pf-limiting-name {
+    font-weight: 600;
+    color: #343a40;
+    margin-bottom: 0.25rem;
+}
+
+.pf-limiting-detail {
+    font-size: 0.85rem;
+    color: #6c757d;
+}
+
+/* ── Resumen de Estado ── */
+.pf-status-summary {
+    background: var(--pf-bg-card);
+    border-radius: var(--pf-radius);
+    box-shadow: var(--pf-shadow);
+    overflow: hidden;
+}
+
+.pf-summary-header {
+    padding: 0.75rem 1rem;
+    font-weight: 600;
+    font-size: 0.85rem;
+    color: #495057;
+    border-bottom: 1px solid var(--pf-border);
+    background: #f8f9fa;
+}
+
+.pf-summary-body {
+    padding: 0.75rem 1rem;
+}
+
+.pf-summary-item {
+    display: flex;
+    align-items: center;
+    padding: 0.4rem 0;
+}
+
+.pf-summary-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-right: 0.75rem;
+    flex-shrink: 0;
+}
+
+.pf-dot-green {
+    background: var(--pf-success);
+}
+
+.pf-dot-yellow {
+    background: var(--pf-warning);
+}
+
+.pf-dot-red {
+    background: var(--pf-danger);
+}
+
+.pf-summary-label {
+    flex-grow: 1;
+    font-size: 0.85rem;
+    color: #495057;
+}
+
+.pf-summary-value {
+    font-weight: 700;
+    font-size: 0.95rem;
+    color: #343a40;
+}
+
+/* ── Tabla scroll wrapper ── */
+.pf-table-scroll-wrapper {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.pf-table-scroll-wrapper .pf-components-card
+/* ==========================================================================
+   ARBOL INTERACTIVO / LOG DE EXPLOSION (NUEVO DISEÑO NODO)
+   ========================================================================== */
+
+.pf-log-section {
+    background: #ffffff;
+    border-radius: var(--pf-radius);
+    box-shadow: var(--pf-shadow);
+    overflow: hidden;
+    border: 1px solid var(--pf-border);
+}
+
+.pf-log-toggle {
+    padding: 1rem 1.25rem;
+    cursor: pointer;
+    background: linear-gradient(to right, #ffffff, #f8fafc);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    transition: var(--pf-transition);
+}
+
+.pf-log-toggle:hover {
+    background: #f1f5f9;
+}
+
+.pf-log-chevron {
+    transition: transform 0.3s ease;
+    color: var(--pf-text-light);
+}
+
+.pf-log-tree-container {
+    background: #f8fafc;
+    /* Fondo gris claro suave para resaltar las tarjetas blancas */
+    padding: 1.5rem;
+    border-top: 1px solid var(--pf-border);
+    max-height: 700px;
+    overflow-y: auto;
+    animation: pf-slideDown 0.3s ease;
+}
+
+/* ================== NODOS CARD ================== */
+
+.pf-tree-node {
+    position: relative;
+    display: flex;
+    align-items: center;
+    margin-bottom: 0.75rem;
+}
+
+/* Línea Conectora (Árbol) */
+.pf-tree-connector {
+    position: absolute;
+    left: -18px;
+    top: -24px;
+    width: 18px;
+    height: calc(50% + 24px);
+    border-left: 2px solid #cbd5e1;
+    border-bottom: 2px solid #cbd5e1;
+    border-bottom-left-radius: 8px;
+    z-index: 1;
+}
+
+.pf-node-card {
+    display: flex;
+    align-items: center;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 0.75rem 1rem;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+    flex: 1;
+    transition: all 0.2s ease;
+    z-index: 2;
+}
+
+.pf-node-card:hover {
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.06), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+    border-color: #cbd5e1;
+}
+
+.pf-node-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 1rem;
+    font-size: 1rem;
+    flex-shrink: 0;
+}
+
+/* Variantes de Color Iconos */
+.pf-icon-primary {
+    background: #eff6ff;
+    color: #3b82f6;
+}
+
+.pf-icon-info {
+    background: #f0fdfa;
+    color: #0d9488;
+}
+
+.pf-icon-warning {
+    background: #fffbeb;
+    color: #d97706;
+}
+
+.pf-icon-success {
+    background: #f0fdf4;
+    color: #16a34a;
+}
+
+.pf-icon-danger {
+    background: #fef2f2;
+    color: #dc2626;
+}
+
+.pf-node-details {
+    flex-grow: 1;
+}
+
+.pf-node-title {
+    font-weight: 600;
+    color: #1e293b;
+    font-size: 0.95rem;
+    line-height: 1.2;
+}
+
+.pf-node-meta {
+    font-size: 0.8rem;
+    color: #64748b;
+    margin-top: 0.35rem;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.pf-node-qty {
+    font-weight: 500;
+    color: #475569;
+    background: #f1f5f9;
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
+.pf-node-bom {
+    display: flex;
+    align-items: center;
+}
+
+/* Header Específico */
+.pf-node-header {
+    background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+    border-color: #cbd5e1;
+    border-left: 4px solid var(--pf-primary);
+}
+
+/* Resultados Especiales (Componentes Finales) */
+.pf-result-card-red {
+    border-left: 4px solid var(--pf-danger);
+    background-color: rgba(220, 53, 69, 0.02);
+}
+
+.pf-result-card-yellow {
+    border-left: 4px solid var(--pf-warning);
+    background-color: rgba(255, 193, 7, 0.02);
+}
+
+.pf-result-card-green {
+    border-left: 4px solid var(--pf-success);
+}
+
+/* Separador visual entre explosión y resultados */
+.pf-log-component:first-of-type {
+    margin-top: 0.5rem;
+    border-top: 1px dashed var(--pf-border);
+    padding-top: 0.75rem;
+}
+
+/* Fallback pre */
+.pf-log-fallback .pf-log-pre {
+    background: #1e1e2e;
+    color: #cdd6f4;
+    padding: 1rem 1.25rem;
+    border-radius: 0;
+    font-size: 0.78rem;
+    line-height: 1.7;
+    max-height: 400px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+    margin: 0;
+}
+
+/* ── Animaciones ── */
+@keyframes pf-slideDown {
+    from {
+        opacity: 0;
+        max-height: 0;
+        transform: translateY(-10px);
+    }
+
+    to {
+        opacity: 1;
+        max-height: 2000px;
+        transform: translateY(0);
+    }
+}
+
+/* ── Responsive ── */
+@media (max-width: 992px) {
+    .pf-result-card-wrapper {
+        position: relative;
+        top: auto;
+    }
+
+    .pf-content-area {
+        padding: 1rem;
+    }
+
+    .pf-result-number {
+        font-size: 2.5rem;
+    }
+}
+
+@media (max-width: 768px) {
+    .pf-cp-inner {
+        flex-direction: column;
+        align-items: stretch !important;
+    }
+
+    .pf-search-container {
+        max-width: 100% !important;
+    }
+
+    .pf-mode-toggle {
+        width: 100%;
+    }
+
+    .pf-mode-btn {
+        flex: 1;
+    }
+
+    .pf-action-buttons {
+        width: 100%;
+        margin-left: 0 !important;
+    }
+
+    .pf-action-buttons .btn {
+        flex: 1;
+    }
+}
