@@ -93,7 +93,7 @@ export class ReturnPopup extends Component {
      * Handle return type change.
      * Resets dependent state to avoid inconsistent data.
      */
-    onTypeChange(ev) {
+    onTypeChange() {
         // t-model handles the value update, but we need to clear data
         // associated with the previous type.
         this.state.products = [];
@@ -107,7 +107,7 @@ export class ReturnPopup extends Component {
 
         // Fix: If partner is selected but tickets are missing (e.g. selected during Arus mode),
         // we must fetch them now.
-        if (ev.target.value === 'odoo' && this.state.partner) {
+        if (this.state.returnType === 'odoo' && this.state.partner) {
             this._loadTicketsForPartner(this.state.partner.id);
         }
     }
@@ -461,6 +461,14 @@ export class ReturnPopup extends Component {
                 { type: "danger" }
             );
         }
+    }
+
+    /**
+     * Cambia del popup de devolución al popup de intercambio
+     */
+    switchToExchange() {
+        this.props.close();
+        this.pos.openExchange();
     }
 
     /**

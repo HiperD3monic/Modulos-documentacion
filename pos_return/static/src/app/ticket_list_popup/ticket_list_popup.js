@@ -67,4 +67,24 @@ export class TicketListPopup extends Component {
         this.props.getPayload(ticket);
         this.props.close();
     }
+
+    /**
+     * Calcula el porcentaje de devolución de un ticket.
+     * @param {Object} ticket
+     * @returns {number} 0-100
+     */
+    getReturnPercentage(ticket) {
+        if (!ticket.total_original_qty || ticket.total_original_qty === 0) return 0;
+        const returned = ticket.total_original_qty - (ticket.total_remaining_qty || 0);
+        return Math.round((returned / ticket.total_original_qty) * 100);
+    }
+
+    /**
+     * Etiqueta legible del estado de devolución.
+     */
+    getStatusLabel(ticket) {
+        if (ticket.return_status === 'full') return 'Devuelto';
+        if (ticket.return_status === 'partial') return 'Parcial';
+        return '';
+    }
 }

@@ -1,7 +1,9 @@
 # -*- coding: utf-8 -*-
 from odoo import api, fields, models, _
 from odoo.exceptions import UserError
+import json
 import logging
+import re
 
 _logger = logging.getLogger(__name__)
 
@@ -234,22 +236,89 @@ class PosSession(models.Model):
         """
         Busca los últimos pedidos (tickets) de un cliente específico.
         Limitado a los 20 más recientes para evitar sobrecarga.
+        
+        Retorna por cada ticket:
+        - lines: solo líneas con remaining_qty > 0 (para selección de devolución)
+        - all_lines: TODAS las líneas incluyendo devueltas (para visualización completa)
+        - return_status: 'none', 'partial', 'full'
+        - total_original_qty: suma de cantidades originales
+        - total_remaining_qty: suma de cantidades disponibles para devolver
+        - exchanges: lista de intercambios asociados al ticket
         """
         domain = [('partner_id', '=', partner_id), ('state', 'in', ['paid', 'done', 'invoiced'])]
         orders = self.env['pos.order'].search(domain, order='date_order desc', limit=20)
         
         results = []
         for order in orders:
+            origin_refs = [order.pos_reference, order.name]
+            
             # Buscar devoluciones previas (Pickings de entrada con origen = referencia del ticket)
-            # Notas: 
-            # - Buscamos tanto por pos_reference como por name para asegurar cobertura
-            # - Solo consideramos pickings en estado 'done' (efectivamente devueltos)
-            # - Solo tipo 'incoming' (recepción)
             return_pickings = self.env['stock.picking'].search([
-                ('origin', 'in', [order.pos_reference, order.name]),
+                ('origin', 'in', origin_refs),
                 ('state', '=', 'done'),
                 ('picking_type_id.code', '=', 'incoming')
             ])
+            
+            # Buscar entregas de intercambio (Pickings de salida)
+            # Nuevos intercambios usan prefijo INT: en el origin
+            # Para backward compatibility, también buscamos sin prefijo
+            # pero excluimos pickings del POS (que usan el picking_type del config)
+            exchange_out_origins = ['INT:' + ref for ref in origin_refs]
+            
+            # Buscar con prefijo INT: (nuevos intercambios)
+            exchange_pickings = self.env['stock.picking'].search([
+                ('origin', 'in', exchange_out_origins),
+                ('state', '=', 'done'),
+                ('picking_type_id.code', '=', 'outgoing')
+            ])
+            
+            # Backward compatibility: buscar sin prefijo, excluyendo pickings del POS
+            if not exchange_pickings:
+                pos_picking_type = self.config_id.picking_type_id
+                legacy_pickings = self.env['stock.picking'].search([
+                    ('origin', 'in', origin_refs),
+                    ('state', '=', 'done'),
+                    ('picking_type_id.code', '=', 'outgoing'),
+                    ('picking_type_id', '!=', pos_picking_type.id),
+                ])
+                exchange_pickings = legacy_pickings
+            
+            # Construir información de intercambios
+            exchanges_data = []
+            exchange_delivery_origins = set()
+            for ep in exchange_pickings:
+                exchange_delivery_origins.add(ep.origin)
+                new_products = []
+                for move in ep.move_ids:
+                    new_products.append({
+                        'product_name': move.product_id.display_name,
+                        'quantity': move.quantity,
+                    })
+                
+                # Find the linked return picking (reception)
+                returned_products_list = []
+                picking_in_name = ''
+                return_name = self._extract_note_metadata(ep.note, 'EXCHANGE_RETURN')
+                if return_name:
+                    try:
+                        return_picking = self.env['stock.picking'].search([('name', '=', return_name)], limit=1)
+                        if return_picking:
+                            picking_in_name = return_picking.name
+                            for move in return_picking.move_ids:
+                                returned_products_list.append({
+                                    'product_name': move.product_id.display_name,
+                                    'quantity': move.quantity,
+                                })
+                    except (ValueError, IndexError):
+                        pass
+                
+                exchanges_data.append({
+                    'picking_out_name': ep.name,
+                    'picking_in_name': picking_in_name,
+                    'date': str(ep.scheduled_date or ep.create_date),
+                    'new_products': new_products,
+                    'returned_products': returned_products_list,
+                })
             
             # Calcular cantidad ya devuelta por producto
             returned_qty_by_product = {}
@@ -258,36 +327,129 @@ class PosSession(models.Model):
                     pid = move.product_id.id
                     returned_qty_by_product[pid] = returned_qty_by_product.get(pid, 0) + move.quantity
 
-            lines_data = []
+            lines_data = []       # Solo líneas con remaining > 0 (para selección)
+            all_lines_data = []   # TODAS las líneas (para visualización)
+            total_original_qty = 0
+            total_remaining_qty = 0
+
             for line in order.lines:
                 pid = line.product_id.id
                 original_qty = line.qty
                 returned_so_far = returned_qty_by_product.get(pid, 0)
                 
-                # Calcular remanente para esta línea
-                # Si hay multiples lineas del mismo producto, vamos descontando del acumulado
                 remaining_qty = max(0, original_qty - returned_so_far)
                 
-                # Actualizar el acumulado de devueltos (consumir lo que se pudo de esta linea)
-                # Si teniamos 3 devueltos y esta linea es de 5:
-                # remaining = 2.
-                # Nuevo returned_so_far debe ser 0 para la proxima linea (ya "gastamos" los 3 devueltos aqui)
-                # Si teniamos 10 devueltos y linea de 5:
-                # remaining = 0.
-                # Nuevo returned_so_far = 5 (sobran 5 por descontar a otras lineas)
                 deducted = original_qty - remaining_qty
                 returned_qty_by_product[pid] = max(0, returned_so_far - deducted)
-                
+
+                total_original_qty += original_qty
+                total_remaining_qty += remaining_qty
+
+                line_dict = {
+                    'id': line.id,
+                    'product_id': line.product_id.id,
+                    'name': line.product_id.display_name,
+                    'qty': original_qty,
+                    'remaining_qty': remaining_qty,
+                    'price_unit': line.price_unit,
+                    'price_subtotal_incl': line.price_subtotal_incl,
+                    'is_exchange_product': False,
+                }
+
+                # all_lines siempre incluye la línea
+                all_lines_data.append(line_dict)
+
+                # lines solo incluye si hay remanente
                 if remaining_qty > 0:
-                    lines_data.append({
-                        'id': line.id,
-                        'product_id': line.product_id.id,
-                        'name': line.product_id.name,
-                        'qty': original_qty, # Cantidad original de la compra
-                        'remaining_qty': remaining_qty, # Cantidad disponible para devolver
-                        'price_unit': line.price_unit,
-                        'price_subtotal_incl': line.price_subtotal_incl,
-                    })
+                    lines_data.append(line_dict)
+
+            # === Agregar productos de intercambio como líneas retornables ===
+            # Estos son productos que el cliente recibió en un intercambio previo
+            # y que puede devolver o volver a intercambiar
+            for ep in exchange_pickings:
+                # Buscar si los productos de este intercambio ya fueron devueltos
+                ep_return_pickings = self.env['stock.picking'].search([
+                    ('origin', 'in', [ep.name, 'INT:' + ep.name]),
+                    ('state', '=', 'done'),
+                    ('picking_type_id.code', '=', 'incoming')
+                ])
+                ep_returned_by_product = {}
+                for rp in ep_return_pickings:
+                    for move in rp.move_ids:
+                        pid = move.product_id.id
+                        ep_returned_by_product[pid] = ep_returned_by_product.get(pid, 0) + move.quantity
+
+                # Parse stored exchange prices from picking note
+                exchange_prices = {}
+                prices_str = self._extract_note_metadata(ep.note, 'EXCHANGE_PRICES')
+                if prices_str:
+                    try:
+                        exchange_prices = json.loads(prices_str)
+                    except (json.JSONDecodeError, ValueError):
+                        pass
+
+                for move in ep.move_ids:
+                    pid = move.product_id.id
+                    ex_qty = move.quantity
+
+                    # Check returns specific to this exchange delivery picking
+                    ex_returned = ep_returned_by_product.get(pid, 0)
+
+                    # Also check the general return pool (returned_qty_by_product)
+                    # This catches returns where origin = ticket ref (e.g., when an
+                    # exchange product is returned via a subsequent exchange)
+                    general_returned = returned_qty_by_product.get(pid, 0)
+                    total_returned = ex_returned + general_returned
+
+                    ex_remaining = max(0, ex_qty - total_returned)
+
+                    # Deduct consumed quantities from both pools
+                    consumed = ex_qty - ex_remaining
+                    ep_consumed = min(consumed, ex_returned)
+                    ep_returned_by_product[pid] = max(0, ex_returned - ep_consumed)
+                    general_consumed = consumed - ep_consumed
+                    returned_qty_by_product[pid] = max(0, general_returned - general_consumed)
+
+                    total_original_qty += ex_qty
+                    total_remaining_qty += ex_remaining
+
+                    # Use stored exchange price > pricelist price > lst_price
+                    stored_price = exchange_prices.get(str(pid))
+                    if stored_price is not None:
+                        ex_price = stored_price
+                    else:
+                        # Fallback for exchanges created before price storage
+                        pricelist = self.config_id.pricelist_id
+                        if pricelist:
+                            ex_price = pricelist._get_product_price(move.product_id, 1.0)
+                        else:
+                            ex_price = move.product_id.lst_price
+
+                    ex_line_dict = {
+                        'id': 'ex_%s_%s' % (ep.id, move.id),
+                        'product_id': move.product_id.id,
+                        'name': '🔄 ' + move.product_id.display_name,
+                        'qty': ex_qty,
+                        'remaining_qty': ex_remaining,
+                        'price_unit': ex_price,
+                        'price_subtotal_incl': ex_price * ex_qty,
+                        'is_exchange_product': True,
+                        'exchange_picking': ep.name,
+                    }
+
+                    all_lines_data.append(ex_line_dict)
+                    if ex_remaining > 0:
+                        lines_data.append(ex_line_dict)
+
+            # Determinar estado de devolución del ticket
+            if total_original_qty == 0:
+                return_status = 'none'
+            elif total_remaining_qty == 0:
+                return_status = 'full'
+            elif total_remaining_qty < total_original_qty:
+                return_status = 'partial'
+            else:
+                return_status = 'none'
 
             results.append({
                 'id': order.id,
@@ -296,6 +458,311 @@ class PosSession(models.Model):
                 'date_order': order.date_order,
                 'amount_total': order.amount_total,
                 'lines': lines_data,
+                'all_lines': all_lines_data,
+                'return_status': return_status,
+                'total_original_qty': total_original_qty,
+                'total_remaining_qty': total_remaining_qty,
+                'has_exchange': len(exchanges_data) > 0,
+                'exchanges': exchanges_data,
             })
             
         return results
+
+    # =====================================================================
+    # INTERCAMBIO (Exchange) Methods
+    # =====================================================================
+
+    def create_exchange(self, ticket, returned_products, new_products, exchange_type='odoo', partner_id=False):
+        """
+        Crea un intercambio de productos con manejo inteligente de dinero.
+        
+        Flujo:
+        1. Valida datos de entrada
+        2. Crea picking de recepción (productos devueltos entran al inventario)
+        3. Crea picking de entrega (productos nuevos salen del inventario)
+        4. Calcula diferencia y crea movimiento de caja solo si es necesario
+        
+        :param ticket: Número de ticket o razón (si es sin ticket)
+        :param returned_products: Lista de productos devueltos [{product_id, quantity, price_unit}]
+        :param new_products: Lista de productos nuevos [{product_id, quantity, price_unit}]
+        :param exchange_type: 'odoo', 'arus', 'no_ticket'
+        :param partner_id: ID del cliente (opcional)
+        """
+        self.ensure_one()
+        _logger.info("POS Exchange: Creating exchange type %s for %s", exchange_type, ticket)
+        
+        try:
+            # === Validaciones de entrada ===
+            if not ticket:
+                if exchange_type == 'no_ticket':
+                    raise UserError(str(_("Debe ingresar una razón para el intercambio.")))
+                raise UserError(str(_("El número de ticket es obligatorio.")))
+            
+            if not returned_products:
+                raise UserError(str(_("Debe seleccionar al menos un producto a devolver.")))
+            
+            if not new_products:
+                raise UserError(str(_("Debe seleccionar al menos un producto nuevo para el intercambio.")))
+            
+            # === Calcular totales ===
+            return_total = sum(
+                p['quantity'] * p['price_unit'] for p in returned_products
+            )
+            new_total = sum(
+                p['quantity'] * p['price_unit'] for p in new_products
+            )
+            
+            if return_total <= 0:
+                raise UserError(str(_("El valor de los productos a devolver debe ser mayor a cero.")))
+            if new_total <= 0:
+                raise UserError(str(_("El valor de los productos nuevos debe ser mayor a cero.")))
+            
+            # === Determinar referencia y etiquetas ===
+            if exchange_type == 'no_ticket':
+                user_reason = ticket
+                origin_ref = "INTERCAMBIO_SIN_TICKET"
+                base_type = str(_("Intercambio"))
+                payment_reason = user_reason
+            elif exchange_type == 'arus':
+                origin_ref = ticket
+                payment_reason = ticket
+                base_type = str(_("Intercambio Arus"))
+            else:  # odoo
+                origin_ref = ticket
+                payment_reason = ticket
+                base_type = str(_("Intercambio Odoo"))
+            
+            # === Crear picking de recepción (productos devueltos) ===
+            picking_in = self._create_return_receipt(origin_ref, returned_products, partner_id)
+            
+            # === Crear picking de entrega (productos nuevos) ===
+            picking_out = self._create_exchange_delivery(origin_ref, new_products, partner_id)
+            
+            # === Manejo inteligente de dinero ===
+            difference = new_total - return_total
+            cash_message = str(_("Sin movimiento de caja"))
+            needs_payment = False
+            
+            if difference > 0:
+                needs_payment = True
+                cash_message = str(_("Pendiente de cobro"))
+            elif difference < 0:
+                self._create_exchange_cash_movement(
+                    payment_reason, abs(difference), partner_id, 'out',
+                    type_label=str(_("%s - Devolución") % base_type)
+                )
+                cash_message = str(_("Devolución al cliente"))
+            
+            # === Construir nota legible para los pickings ===
+            readable_note = self._build_exchange_note(
+                exchange_type, ticket,
+                returned_products, new_products,
+                picking_in, picking_out,
+                difference, cash_message
+            )
+            picking_out.note = readable_note
+            picking_in.note = readable_note
+            
+            _logger.info(
+                "POS Exchange: Created. In: %s, Out: %s, Diff: %s",
+                picking_in.name, picking_out.name, difference
+            )
+            
+            return {
+                'success': True,
+                'picking_in_id': picking_in.id,
+                'picking_in_name': picking_in.name,
+                'picking_out_id': picking_out.id,
+                'picking_out_name': picking_out.name,
+                'return_total': return_total,
+                'new_total': new_total,
+                'difference': difference,
+                'needs_payment': needs_payment,
+                'cash_message': cash_message,
+                'message': str(_("Intercambio creado exitosamente.")),
+                'returned_products_data': returned_products if needs_payment else [],
+                'new_products_data': new_products if needs_payment else [],
+                'exchange_ref': origin_ref,
+            }
+        except Exception as e:
+            _logger.exception("POS Exchange: Error creating exchange")
+            return {
+                'success': False,
+                'error': str(e),
+            }
+
+    def _create_exchange_delivery(self, origin_ref, products_data, partner_id=False):
+        """
+        Crea un picking de entrega (salida de inventario) para los productos nuevos del intercambio.
+        
+        :param origin_ref: Referencia de origen
+        :param products_data: Lista de productos nuevos a entregar
+        :param partner_id: ID del cliente (opcional)
+        :return: stock.picking creado y validado
+        """
+        self.ensure_one()
+        
+        # Obtener el almacén desde la configuración del POS
+        warehouse = self.config_id.picking_type_id.warehouse_id
+        if not warehouse:
+            warehouse = self.env['stock.warehouse'].search([
+                ('company_id', '=', self.company_id.id)
+            ], limit=1)
+        
+        if not warehouse:
+            raise UserError(str(_("No se encontró un almacén configurado.")))
+        
+        # Tipo de operación de entrega (salida)
+        picking_type = warehouse.out_type_id
+        if not picking_type:
+            raise UserError(str(_("No se encontró un tipo de operación de entrega en el almacén.")))
+        
+        # Ubicaciones: origen (stock principal) y destino (clientes)
+        location_src = warehouse.lot_stock_id
+        location_dest = self.env.ref('stock.stock_location_customers')
+        
+        # Crear el picking de entrega (nota se asigna después en create_exchange)
+        picking_vals = {
+            'picking_type_id': picking_type.id,
+            'partner_id': partner_id,
+            'origin': 'INT:' + origin_ref,
+            'location_id': location_src.id,
+            'location_dest_id': location_dest.id,
+            'scheduled_date': fields.Datetime.now(),
+            'move_type': 'direct',
+        }
+        picking = self.env['stock.picking'].create(picking_vals)
+        
+        # Crear movimientos de stock para cada producto
+        for product_data in products_data:
+            product = self.env['product.product'].browse(product_data['product_id'])
+            if not product.exists():
+                raise UserError(str(_("Producto no encontrado: ID %s") % product_data['product_id']))
+            
+            move_vals = {
+                'product_id': product.id,
+                'product_uom_qty': product_data['quantity'],
+                'product_uom': product.uom_id.id,
+                'picking_id': picking.id,
+                'location_id': location_src.id,
+                'location_dest_id': location_dest.id,
+                'picking_type_id': picking_type.id,
+            }
+            self.env['stock.move'].create(move_vals)
+        
+        # Flujo de validación
+        picking.action_confirm()
+        picking.action_assign()
+        
+        for move in picking.move_ids:
+            move.quantity = move.product_uom_qty
+            move.picked = True
+        
+        picking._action_done()
+        
+        return picking
+
+    def _create_exchange_cash_movement(self, reason, amount, partner_id=False, direction='out', type_label=False):
+        """
+        Crea un movimiento de caja para el intercambio, solo si el monto es mayor a 0.
+        
+        :param reason: Razón del movimiento
+        :param amount: Monto absoluto del movimiento
+        :param partner_id: ID del cliente
+        :param direction: 'in' para cobro al cliente, 'out' para devolución al cliente
+        :param type_label: Etiqueta personalizada del tipo de movimiento
+        """
+        self.ensure_one()
+        
+        if amount <= 0:
+            return  # No crear movimiento si no hay diferencia
+        
+        partner = self.env['res.partner'].browse(partner_id) if partner_id else False
+        t_type = type_label if type_label else str(_("Intercambio"))
+        extras = {'translatedType': t_type}
+        partner_val = partner.id if partner else False
+        
+        self.try_cash_in_out(direction, amount, reason, partner_val, extras)
+
+    def _extract_note_metadata(self, note, key):
+        """
+        Extrae metadatos de una nota de picking.
+        Soporta dos formatos:
+        - Comentarios HTML: <!-- KEY:value -->
+        - Texto plano (legacy): KEY:value
+        Retorna el valor como string, o '' si no se encuentra.
+        """
+        if not note:
+            return ''
+        
+        # Formato 1: Comentario HTML <!-- KEY:value -->
+        comment_match = re.search(r'<!--\s*' + re.escape(key) + r':(.+?)\s*-->', note)
+        if comment_match:
+            return comment_match.group(1).strip()
+        
+        # Formato 2: Texto plano (legacy / fallback)
+        raw = note.replace('<br/>', '\n').replace('<br>', '\n')
+        raw = re.sub(r'<[^>]+>', '', raw)
+        if key + ':' in raw:
+            try:
+                value = raw[raw.index(key + ':') + len(key) + 1:].split('\n')[0].strip()
+                return value
+            except (ValueError, IndexError):
+                pass
+        
+        return ''
+
+    def _build_exchange_note(self, exchange_type, ticket,
+                             returned_products, new_products,
+                             picking_in, picking_out,
+                             difference, cash_message):
+        """
+        Construye una nota HTML legible y detallada para los pickings del intercambio.
+        Incluye EXCHANGE_PRICES y EXCHANGE_RETURN al final para recuperación interna.
+        """
+        # Encabezado
+        type_labels = {
+            'no_ticket': 'INTERCAMBIO SIN TICKET',
+            'arus': 'INTERCAMBIO ARUS',
+            'odoo': 'INTERCAMBIO ODOO',
+        }
+        header = type_labels.get(exchange_type, 'INTERCAMBIO')
+        
+        html = '<div style="font-family: sans-serif; font-size: 13px;">'
+        html += '<p><strong>═══ %s ═══</strong></p>' % header
+        
+        if exchange_type == 'no_ticket':
+            html += '<p>Razón: %s</p>' % ticket
+        else:
+            html += '<p>Ticket origen: %s</p>' % ticket
+        
+        # Productos devueltos
+        html += '<p><strong style="color:#dc2626;">Productos devueltos</strong> (Recepción: %s):</p>' % picking_in.name
+        html += '<ul>'
+        for p in returned_products:
+            product = self.env['product.product'].browse(p['product_id'])
+            html += '<li>%s x%s — $%.2f</li>' % (
+                product.display_name, int(p['quantity']), p['price_unit']
+            )
+        html += '</ul>'
+        
+        # Productos entregados
+        html += '<p><strong style="color:#16a34a;">Productos entregados</strong> (Entrega: %s):</p>' % picking_out.name
+        html += '<ul>'
+        for p in new_products:
+            product = self.env['product.product'].browse(p['product_id'])
+            html += '<li>%s x%s — $%.2f</li>' % (
+                product.display_name, int(p['quantity']), p['price_unit']
+            )
+        html += '</ul>'
+        
+        # Resumen financiero
+        html += '<p><strong>Diferencia:</strong> $%.2f (%s)</p>' % (abs(difference), cash_message)
+        html += '</div>'
+        
+        # Metadata interna en comentarios HTML (sobrevive la sanitización de Odoo)
+        price_map = {str(pd['product_id']): pd['price_unit'] for pd in new_products}
+        html += '<!-- EXCHANGE_PRICES:' + json.dumps(price_map) + ' -->'
+        html += '<!-- EXCHANGE_RETURN:' + picking_in.name + ' -->'
+        
+        return html
