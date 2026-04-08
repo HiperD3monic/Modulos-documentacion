@@ -2,29 +2,26 @@
 <odoo>
 
     <!-- ============================================================ -->
-    <!-- Inherit sale.order form view to add rental_days field         -->
+    <!-- Inherit the RENTAL-ONLY form view to add rental_days field   -->
+    <!-- This view only loads when accessing orders from the Rental   -->
+    <!-- app (Alquiler), not from Sales or Subscriptions.             -->
     <!-- ============================================================ -->
     <record id="view_order_form_inherit_rental" model="ir.ui.view">
-        <field name="name">sale.order.form.inherit.rental</field>
+        <field name="name">sale.order.form.inherit.rental.days</field>
         <field name="model">sale.order</field>
-        <field name="inherit_id" ref="sale.view_order_form"/>
+        <field name="inherit_id" ref="sale_renting.rental_order_primary_form_view"/>
         <field name="arch" type="xml">
 
-            <!-- 1. Add "Días de renta" field in order header, after payment_term_id INSIDE group named 'order_details' -->
-            <xpath expr="//group[@name='order_details']/field[@name='payment_term_id']" position="after">
-                <field name="rental_days"/>
-            </xpath>
-
-            <!-- 2. Add "Días de renta" column in sale order line tree (after quantity) -->
+            <!-- 1. Add "Días de renta" column in sale order line tree (editable, after quantity) -->
             <xpath expr="//field[@name='order_line']//list//field[@name='product_uom_qty']" position="after">
-                <field name="rental_days" string="Días de renta" readonly="1" optional="show"/>
+                <field name="rental_days" string="Periodo de renta" optional="show"/>
             </xpath>
 
-            <!-- 3. Add "Días de renta" in sale order line form (after ordered_qty div) -->
+            <!-- 2. Add "Días de renta" in sale order line form (after ordered_qty div) -->
             <xpath expr="//field[@name='order_line']//form//div[@name='ordered_qty']" position="after">
                 <label for="rental_days"/>
                 <div>
-                    <field name="rental_days" class="oe_inline" readonly="1"/>
+                    <field name="rental_days" class="oe_inline"/>
                 </div>
             </xpath>
 

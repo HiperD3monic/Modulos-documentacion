@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Called on both install and update to add PERIODO RENTA column to Studio report -->
+    <function model="sale.order" name="_apply_rental_report_column"/>
+</odoo>

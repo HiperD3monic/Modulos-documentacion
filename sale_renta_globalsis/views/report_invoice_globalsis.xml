@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ============================================================ -->
+    <!-- Add PERIODO RENTA column to Globalsis invoice report          -->
+    <!-- Only visible for rental invoices, hidden for subscriptions   -->
+    <!-- Inherits l10n_mx_edi.report_invoice_document                  -->
+    <!-- ============================================================ -->
+    <template id="report_invoice_globalsis_rental_days"
+              inherit_id="l10n_mx_edi.report_invoice_document">
+
+        <!-- 1. Add PERIODO RENTA header before PRECIO UNITARIO -->
+        <xpath expr="//table[@name='invoice_line_table']//th[@name='th_priceunit']" position="before">
+            <th name="th_rental_days"
+                t-if="o.is_rental_invoice"
+                class="text-center">
+                <span>PERIODO RENTA</span>
+            </th>
+        </xpath>
+
+        <!-- 2. Add rental_days cell before price unit cell -->
+        <xpath expr="//table[@name='invoice_line_table']//td[@name='td_price_unit']" position="before">
+            <td name="td_rental_days"
+                t-if="o.is_rental_invoice"
+                class="text-center">
+                <span t-field="line.rental_days"/>
+            </td>
+        </xpath>
+
+    </template>
+
+</odoo>

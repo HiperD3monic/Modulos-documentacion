@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ============================================================ -->
+    <!-- PERIODO RENTA columns are now baked into the base template    -->
+    <!-- (globalsis_reports.report_saleorder_document)                 -->
+    <!-- This inherited view is kept empty to avoid duplicates.        -->
+    <!-- ============================================================ -->
+    <template id="report_globalsis_saleorder_rental_days"
+              inherit_id="globalsis_reports.report_saleorder_document">
+        <!-- No-op: columns already in base template -->
+    </template>
+
+</odoo>
