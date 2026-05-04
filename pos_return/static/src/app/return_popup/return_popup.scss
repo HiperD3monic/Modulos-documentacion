@@ -33,3 +33,14 @@
 .partner-list-screen .top-content .button.new-customer {
     display: none !important;
 }
+
+/* Ticket input: always white background for better visibility */
+.return-popup .form-control,
+.exchange-popup .form-control {
+    background-color: #fff !important;
+}
+
+/* Ticket search dropdown hover */
+.ticket-search-item:hover {
+    background-color: #f5f3ff !important;
+}

@@ -48,8 +48,11 @@ export class ExchangePopup extends Component {
             partner: null,
             customerTickets: [],
             selectedTicket: null,
+            ticketSearchResults: [],
+            searchingTickets: false,
         });
 
+        this._ticketSearchTimer = null;
         this.confirm = useAsyncLockedMethod(this.confirm);
     }
 
@@ -64,6 +67,8 @@ export class ExchangePopup extends Component {
         this.state.ticket = "";
         this.state.searchQueryReturned = "";
         this.state.searchQueryNew = "";
+        this.state.ticketSearchResults = [];
+        this.state.searchingTickets = false;
 
         if (this.state.exchangeType === 'odoo' && this.state.partner) {
             this._loadTicketsForPartner(this.state.partner.id);
@@ -126,24 +131,96 @@ export class ExchangePopup extends Component {
         });
 
         if (selectedTicket) {
-            this.state.selectedTicket = selectedTicket;
-            this.state.ticket = selectedTicket.pos_reference || selectedTicket.name;
-
-            // Auto-populate returned products from ticket
-            if (selectedTicket.lines && selectedTicket.lines.length > 0) {
-                this.state.returnedProducts = selectedTicket.lines.map(line => ({
-                    product_id: line.product_id,
-                    name: line.name,
-                    quantity: line.remaining_qty || line.qty,
-                    max_quantity: line.remaining_qty || line.qty,
-                    price_unit: line.price_unit,
-                }));
-            } else {
-                this.state.returnedProducts = [];
-            }
-            // New products list stays empty — user picks them separately
-            this.state.newProducts = [];
+            await this._applyTicketSelection(selectedTicket);
         }
+    }
+
+    /**
+     * Búsqueda automática de tickets por referencia (debounce 500ms).
+     */
+    onTicketInput(ev) {
+        const query = ev.target.value.trim();
+        this.state.ticket = ev.target.value;
+
+        if (this._ticketSearchTimer) {
+            clearTimeout(this._ticketSearchTimer);
+        }
+
+        if (query.length < 2) {
+            this.state.ticketSearchResults = [];
+            this.state.searchingTickets = false;
+            return;
+        }
+
+        this.state.searchingTickets = true;
+        this._ticketSearchTimer = setTimeout(async () => {
+            try {
+                const results = await this.orm.call(
+                    "pos.session",
+                    "search_ticket_by_ref",
+                    [[this.pos.session.id], query]
+                );
+                this.state.ticketSearchResults = results;
+            } catch (error) {
+                console.error("Error searching tickets:", error);
+                this.state.ticketSearchResults = [];
+            } finally {
+                this.state.searchingTickets = false;
+            }
+        }, 500);
+    }
+
+    /**
+     * Selecciona un ticket de los resultados de búsqueda automática.
+     */
+    selectSearchResult(ticket) {
+        this.state.ticketSearchResults = [];
+        this._applyTicketSelection(ticket);
+    }
+
+    /**
+     * Quita el ticket seleccionado y vuelve al input de búsqueda.
+     */
+    clearSelectedTicket() {
+        this.state.selectedTicket = null;
+        this.state.ticket = "";
+        this.state.returnedProducts = [];
+        this.state.newProducts = [];
+        this.state.ticketSearchResults = [];
+        this.state.searchingTickets = false;
+    }
+
+    /**
+     * Aplica la selección de un ticket.
+     */
+    async _applyTicketSelection(ticket) {
+        this.state.selectedTicket = ticket;
+        this.state.ticket = ticket.pos_reference || ticket.name;
+        this.state.ticketSearchResults = [];
+
+        // Auto-populate partner from the ticket if available
+        if (ticket.partner_id) {
+            const partner = this.pos.models["res.partner"].get(ticket.partner_id);
+            if (partner) {
+                this.state.partner = partner;
+                await this._loadTicketsForPartner(partner.id);
+            }
+        }
+
+        // Auto-populate returned products from ticket
+        if (ticket.lines && ticket.lines.length > 0) {
+            this.state.returnedProducts = ticket.lines.map(line => ({
+                product_id: line.product_id,
+                name: line.name,
+                quantity: line.remaining_qty || line.qty,
+                max_quantity: line.remaining_qty || line.qty,
+                price_unit: line.price_unit,
+            }));
+        } else {
+            this.state.returnedProducts = [];
+        }
+        // New products list stays empty — user picks them separately
+        this.state.newProducts = [];
     }
 
     // =====================================================================
@@ -647,6 +724,18 @@ export class ExchangePopup extends Component {
             );
 
             if (result.success) {
+                // Reload the original order from server so the custom_exchange_done
+                // flag is properly loaded into the JS model (via raw data)
+                if (result.original_order_id) {
+                    try {
+                        await this.pos.data.loadServerOrders([
+                            ["id", "=", result.original_order_id]
+                        ]);
+                    } catch (e) {
+                        // Non-critical: badge will show after page refresh
+                        console.warn("Could not reload order:", e);
+                    }
+                }
                 if (result.needs_payment) {
                     // === Cliente debe pagar la diferencia ===
                     // Crear una orden POS real para que se pueda elegir método de pago
@@ -692,12 +781,19 @@ export class ExchangePopup extends Component {
         // 2. Crear nueva orden POS
         const order = this.pos.addNewOrder();
 
-        // 3. Asignar cliente si existe
+        // 3. CRITICAL: Mark this order as an exchange payment to prevent
+        // duplicate picking creation. The inventory movements have already
+        // been handled by create_exchange() on the backend.
+        // Without this flag, _create_order_picking() would create DUPLICATE
+        // stock pickings when this order is paid.
+        order.is_exchange_payment = true;
+
+        // 4. Asignar cliente si existe
         if (this.state.partner) {
             order.update({ partner_id: this.state.partner });
         }
 
-        // 4. Agregar cada producto NUEVO como línea individual
+        // 5. Agregar cada producto NUEVO como línea individual
         for (const newProd of this.state.newProducts) {
             const product = this.pos.models["product.product"].get(newProd.product_id);
             if (product) {
@@ -707,7 +803,7 @@ export class ExchangePopup extends Component {
                         product_tmpl_id: product.product_tmpl_id,
                         price_unit: newProd.price_unit,
                         qty: newProd.quantity,
-                        customer_note: "Intercambio ► Producto nuevo",
+                        customer_note: _t("Intercambio ► Producto nuevo"),
                     },
                     {},
                     false
@@ -715,7 +811,7 @@ export class ExchangePopup extends Component {
             }
         }
 
-        // 5. Agregar cada producto DEVUELTO como línea con cantidad negativa
+        // 6. Agregar cada producto DEVUELTO como línea con cantidad negativa
         for (const retProd of this.state.returnedProducts) {
             const product = this.pos.models["product.product"].get(retProd.product_id);
             if (product) {
@@ -725,7 +821,7 @@ export class ExchangePopup extends Component {
                         product_tmpl_id: product.product_tmpl_id,
                         price_unit: retProd.price_unit,
                         qty: -retProd.quantity,
-                        customer_note: "Intercambio ► Producto devuelto",
+                        customer_note: _t("Intercambio ► Producto devuelto"),
                     },
                     {},
                     false
@@ -733,17 +829,18 @@ export class ExchangePopup extends Component {
             }
         }
 
-        // 6. Agregar nota a la orden con la referencia del intercambio
-        const noteText = _t(
-            "Intercambio - Entrada: %s | Salida: %s | Ref: %s",
-            exchangeResult.picking_in_name,
-            exchangeResult.picking_out_name,
-            exchangeResult.exchange_ref
-        );
-        
-        if (order.internal_note !== undefined) {
-            order.internal_note = noteText;
-        }
+        // 7. Agregar nota a la orden con la referencia del intercambio
+        // internal_note must be a JSON array (Odoo POS uses JSON.parse on it)
+        const noteTag = {
+            text: _t(
+                "Intercambio - Entrada: %s | Salida: %s | Ref: %s",
+                exchangeResult.picking_in_name,
+                exchangeResult.picking_out_name,
+                exchangeResult.exchange_ref
+            ),
+            colorIndex: 2,
+        };
+        order.internal_note = JSON.stringify([noteTag]);
 
         this.notification.add(
             _t("Intercambio procesado. Complete el pago de la diferencia: %s", 
@@ -751,28 +848,10 @@ export class ExchangePopup extends Component {
             { type: "info" }
         );
 
-        // 7. Navegar al PaymentScreen
+        // 8. Navegar al PaymentScreen
         this.pos.navigate("PaymentScreen", {
             orderUuid: order.uuid,
         });
-    }
-
-    /**
-     * Obtiene un producto base para la línea de crédito (devolución).
-     * Preferimos el primer producto devuelto.
-     */
-    _getCreditBaseProduct() {
-        if (this.state.returnedProducts.length > 0) {
-            const firstReturned = this.state.returnedProducts[0];
-            const product = this.pos.models["product.product"].get(firstReturned.product_id);
-            if (product) return product;
-        }
-        if (this.state.newProducts.length > 0) {
-            const firstNew = this.state.newProducts[0];
-            const product = this.pos.models["product.product"].get(firstNew.product_id);
-            if (product) return product;
-        }
-        return null;
     }
 
     cancel() {

@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates id="template" xml:space="preserve">
+
+    <!-- Add exchange/return badges to TicketScreen order rows -->
+    <t t-name="pos_return.TicketScreen" t-inherit="point_of_sale.TicketScreen" t-inherit-mode="extension">
+
+        <!-- Desktop view: add badges next to status in the last visible column -->
+        <xpath expr="//td[@name='delete-column']" position="before">
+            <td class="align-middle text-center">
+                <div class="d-flex flex-column align-items-center gap-1">
+                    <t t-set="_labels" t-value="getOrderTypeLabels(order)" />
+                    <t t-foreach="_labels" t-as="lbl" t-key="lbl_index">
+                        <div t-attf-class="badge rounded fs-6 text-bg-{{ lbl.color }}" t-esc="lbl.text"/>
+                    </t>
+                </div>
+            </td>
+        </xpath>
+
+        <!-- Mobile view: add badges next to the status -->
+        <xpath expr="//div[@name='delete-column']" position="before">
+            <div class="d-flex align-items-center px-1 gap-1 flex-wrap">
+                <t t-set="_labels" t-value="getOrderTypeLabels(order)" />
+                <t t-foreach="_labels" t-as="lbl" t-key="lbl_index">
+                    <div t-attf-class="badge rounded fs-6 text-bg-{{ lbl.color }}" t-esc="lbl.text"/>
+                </t>
+            </div>
+        </xpath>
+
+        <!-- HIDE: Native "Reembolso" ActionpadWidget in TicketScreen (big button bottom-right) -->
+        <xpath expr="//ActionpadWidget[@actionName.translate='Refund']" position="replace">
+        </xpath>
+
+        <!-- HIDE visually: Numpad + subpads container (keep in DOM for numberBuffer lifecycle) -->
+        <xpath expr="//div[hasclass('subpads')]" position="attributes">
+            <attribute name="style">display:none !important</attribute>
+        </xpath>
+
+        <!-- HIDE: Refund instruction text "Select the product(s) to refund..." -->
+        <xpath expr="//div[contains(@class, 'bg-view') and contains(@class, 'text-center')]" position="replace">
+        </xpath>
+
+    </t>
+
+    <!-- HIDE: Native "Refund" button in the Actions popup menu -->
+    <t t-name="pos_return.ControlButtons" t-inherit="point_of_sale.ControlButtons" t-inherit-mode="extension">
+        <xpath expr="//button[contains(@t-on-click, 'clickRefund')]" position="replace">
+        </xpath>
+    </t>
+
+</templates>

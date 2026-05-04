@@ -20,13 +20,13 @@
         - Sin uso de APIs deprecadas
     """,
     'author': 'dataliza',
-    'website': 'https://www.dataliza.com',
     'depends': [
         'point_of_sale',
         'stock',
     ],
     'data': [
         'security/ir.model.access.csv',
+        'views/pos_order_views.xml',
     ],
     'assets': {
         'point_of_sale._assets_pos': [

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from odoo import api, fields, models, _
-from odoo.exceptions import UserError
+from odoo.exceptions import UserError, ValidationError
 import json
 import logging
 import re
@@ -21,6 +21,42 @@ class PosSession(models.Model):
        - account.bank.statement.line negativo (salida de efectivo)
     """
     _inherit = 'pos.session'
+
+    def _create_picking_at_end_of_session(self):
+        """Override to exclude exchange payment orders from session-end picking creation.
+
+        When update_stock_at_closing=True, this method creates pickings for all orders
+        at session close. Exchange payment orders (is_exchange_payment=True) must be
+        excluded because their inventory was already handled by create_exchange().
+
+        This mirrors the native implementation in
+        addons/point_of_sale/models/pos_session.py _create_picking_at_end_of_session()
+        with the single addition of the is_exchange_payment filter.
+        """
+        self.ensure_one()
+        lines_grouped_by_dest_location = {}
+        picking_type = self.config_id.picking_type_id
+
+        if not picking_type or not picking_type.default_location_dest_id:
+            session_destination_id = self.env['stock.warehouse']._get_partner_locations()[0].id
+        else:
+            session_destination_id = picking_type.default_location_dest_id.id
+
+        for order in self._get_closed_orders():
+            # === ADDED: Skip exchange payment orders (pickings already created) ===
+            if order.is_exchange_payment:
+                continue
+            if order.company_id.anglo_saxon_accounting and order.is_invoiced or order.shipping_date:
+                continue
+            destination_id = order.partner_id.property_stock_customer.id or session_destination_id
+            if destination_id in lines_grouped_by_dest_location:
+                lines_grouped_by_dest_location[destination_id] |= order.lines
+            else:
+                lines_grouped_by_dest_location[destination_id] = order.lines
+
+        for location_dest_id, lines in lines_grouped_by_dest_location.items():
+            pickings = self.env['stock.picking']._create_picking_from_pos_order_lines(location_dest_id, lines, picking_type)
+            pickings.write({'pos_session_id': self.id, 'origin': self.name})
 
     def find_product_by_barcode(self, barcode, config_id):
         """
@@ -109,6 +145,31 @@ class PosSession(models.Model):
                 payment_reason = ticket
                 base_type = str(_("Devolución Odoo"))
             
+            # === Duplicate detection ===
+            # For Odoo tickets, check if a return picking already exists for this ref
+            # to prevent double-click or retried RPC calls from creating duplicates.
+            if return_type == 'odoo' and origin_ref:
+                existing_picking = self.env['stock.picking'].search([
+                    ('origin', '=', origin_ref),
+                    ('picking_type_id.code', '=', 'incoming'),
+                    ('state', '!=', 'cancel'),
+                ], limit=1)
+                if existing_picking:
+                    _logger.warning(
+                        "POS Return: Duplicate return detected for %s. "
+                        "Existing picking: %s. Skipping creation.",
+                        origin_ref, existing_picking.name
+                    )
+                    return {
+                        'success': True,
+                        'picking_id': existing_picking.id,
+                        'picking_name': existing_picking.name,
+                        'total_amount': total_amount,
+                        'message': str(_("Devolución ya procesada anteriormente.")),
+                        'original_order_id': False,
+                        'duplicate': True,
+                    }
+            
             # Crear la recepción de inventario (stock.picking)
             # Para 'no_ticket', usamos la razón como nota (que viene en el argumento ticket).
             note = ticket if return_type == 'no_ticket' else False
@@ -119,12 +180,29 @@ class PosSession(models.Model):
             
             _logger.info("POS Return: Successfully created picking %s", picking.name)
             
+            # === Mark original order as returned (for Odoo tickets only) ===
+            original_order = False
+            if return_type == 'odoo' and ticket:
+                original_order = self.env['pos.order'].search([
+                    ('pos_reference', '=', ticket),
+                ], limit=1)
+                if original_order:
+                    try:
+                        original_order.custom_return_done = True
+                    except (AttributeError, Exception):
+                        self.env.cr.execute(
+                            "UPDATE pos_order SET custom_return_done = true WHERE id = %s",
+                            [original_order.id]
+                        )
+                    _logger.info("POS Return: Marked order %s as returned", original_order.name)
+            
             return {
                 'success': True,
                 'picking_id': picking.id,
                 'picking_name': picking.name,
                 'total_amount': total_amount,
-                'message': str(_("Devolución creada exitosamente."))
+                'message': str(_("Devolución creada exitosamente.")),
+                'original_order_id': original_order.id if original_order else False,
             }
         except Exception as e:
             _logger.exception("POS Return: Error creating return")
@@ -208,7 +286,19 @@ class PosSession(models.Model):
             move.picked = True
         
         # 4. Validar usando _action_done para evitar wizards/validaciones UI
-        picking._action_done()
+        # Wrapped in savepoint + try/except following native POS pattern
+        # (see addons/point_of_sale/models/stock_picking.py _create_picking_from_pos_order_lines)
+        # This ensures the picking is created even if validation fails
+        # (e.g., missing lots, strict reservation rules)
+        self.env.flush_all()
+        try:
+            with self.env.cr.savepoint():
+                picking._action_done()
+        except (UserError, ValidationError):
+            _logger.warning(
+                "POS Return: Picking %s could not be fully validated. "
+                "It will need manual processing.", picking.name
+            )
         
         return picking
     
@@ -237,6 +327,11 @@ class PosSession(models.Model):
         Busca los últimos pedidos (tickets) de un cliente específico.
         Limitado a los 20 más recientes para evitar sobrecarga.
         
+        Excluye:
+        - Reembolsos nativos (is_refund = True)
+        - Órdenes ya devueltas por pos_return (custom_return_done = True)
+        - Órdenes ya intercambiadas por pos_return (custom_exchange_done = True)
+        
         Retorna por cada ticket:
         - lines: solo líneas con remaining_qty > 0 (para selección de devolución)
         - all_lines: TODAS las líneas incluyendo devueltas (para visualización completa)
@@ -245,8 +340,19 @@ class PosSession(models.Model):
         - total_remaining_qty: suma de cantidades disponibles para devolver
         - exchanges: lista de intercambios asociados al ticket
         """
-        domain = [('partner_id', '=', partner_id), ('state', 'in', ['paid', 'done', 'invoiced'])]
+        domain = [
+            ('partner_id', '=', partner_id),
+            ('state', 'in', ['paid', 'done', 'invoiced']),
+            ('is_refund', '=', False),
+            ('custom_return_done', '=', False),
+            ('custom_exchange_replaced', '=', False),
+        ]
         orders = self.env['pos.order'].search(domain, order='date_order desc', limit=20)
+        
+        # Also exclude orders fully refunded via native Odoo refund
+        orders = orders.filtered(
+            lambda o: not all(line.refund_orderline_ids for line in o.lines)
+        )
         
         results = []
         for order in orders:
@@ -465,6 +571,140 @@ class PosSession(models.Model):
                 'has_exchange': len(exchanges_data) > 0,
                 'exchanges': exchanges_data,
             })
+
+        # Exclude tickets with no remaining returnable products
+        results = [r for r in results if r['total_remaining_qty'] > 0 or r['return_status'] == 'none']
+            
+        return results
+
+    def search_ticket_by_ref(self, query):
+        """
+        Busca tickets por número de referencia (pos_reference o name).
+        NO requiere un cliente seleccionado — busca en TODOS los tickets.
+        
+        Soporta búsqueda parcial (ilike) para autocompletado.
+        Limitado a 10 resultados para rendimiento.
+        
+        :param query: Texto de búsqueda (ej: "0006", "POS/001")
+        :return: Lista de tickets en el mismo formato que get_partner_tickets
+        """
+        if not query or len(query) < 2:
+            return []
+        
+        domain = [
+            ('state', 'in', ['paid', 'done', 'invoiced']),
+            ('is_refund', '=', False),
+            ('custom_return_done', '=', False),
+            ('custom_exchange_replaced', '=', False),
+            '|',
+            ('pos_reference', 'ilike', query),
+            ('name', 'ilike', query),
+        ]
+        orders = self.env['pos.order'].search(domain, order='date_order desc', limit=10)
+        
+        # Also exclude orders fully refunded via native Odoo refund
+        orders = orders.filtered(
+            lambda o: not all(line.refund_orderline_ids for line in o.lines)
+        )
+        
+        if not orders:
+            return []
+        
+        results = []
+        for order in orders:
+            origin_refs = [order.pos_reference, order.name]
+            
+            # Buscar devoluciones previas
+            return_pickings = self.env['stock.picking'].search([
+                ('origin', 'in', origin_refs),
+                ('state', '=', 'done'),
+                ('picking_type_id.code', '=', 'incoming')
+            ])
+            
+            # Buscar entregas de intercambio
+            exchange_out_origins = ['INT:' + ref for ref in origin_refs]
+            exchange_pickings = self.env['stock.picking'].search([
+                ('origin', 'in', exchange_out_origins),
+                ('state', '=', 'done'),
+                ('picking_type_id.code', '=', 'outgoing')
+            ])
+            
+            if not exchange_pickings:
+                pos_picking_type = self.config_id.picking_type_id
+                legacy_pickings = self.env['stock.picking'].search([
+                    ('origin', 'in', origin_refs),
+                    ('state', '=', 'done'),
+                    ('picking_type_id.code', '=', 'outgoing'),
+                    ('picking_type_id', '!=', pos_picking_type.id),
+                ])
+                exchange_pickings = legacy_pickings
+            
+            # Calcular cantidad devuelta por producto
+            returned_qty_by_product = {}
+            for picking in return_pickings:
+                for move in picking.move_ids:
+                    pid = move.product_id.id
+                    returned_qty_by_product[pid] = returned_qty_by_product.get(pid, 0) + move.quantity
+
+            lines_data = []
+            all_lines_data = []
+            total_original_qty = 0
+            total_remaining_qty = 0
+
+            for line in order.lines:
+                pid = line.product_id.id
+                original_qty = line.qty
+                returned_so_far = returned_qty_by_product.get(pid, 0)
+                remaining_qty = max(0, original_qty - returned_so_far)
+                deducted = original_qty - remaining_qty
+                returned_qty_by_product[pid] = max(0, returned_so_far - deducted)
+
+                total_original_qty += original_qty
+                total_remaining_qty += remaining_qty
+
+                line_dict = {
+                    'id': line.id,
+                    'product_id': line.product_id.id,
+                    'name': line.product_id.display_name,
+                    'qty': original_qty,
+                    'remaining_qty': remaining_qty,
+                    'price_unit': line.price_unit,
+                    'price_subtotal_incl': line.price_subtotal_incl,
+                    'is_exchange_product': False,
+                }
+                all_lines_data.append(line_dict)
+                if remaining_qty > 0:
+                    lines_data.append(line_dict)
+
+            # Determinar estado
+            if total_original_qty == 0:
+                return_status = 'none'
+            elif total_remaining_qty == 0:
+                return_status = 'full'
+            elif total_remaining_qty < total_original_qty:
+                return_status = 'partial'
+            else:
+                return_status = 'none'
+
+            results.append({
+                'id': order.id,
+                'name': order.name,
+                'pos_reference': order.pos_reference,
+                'date_order': order.date_order,
+                'amount_total': order.amount_total,
+                'partner_id': order.partner_id.id if order.partner_id else False,
+                'partner_name': order.partner_id.name if order.partner_id else _('Sin cliente'),
+                'lines': lines_data,
+                'all_lines': all_lines_data,
+                'return_status': return_status,
+                'total_original_qty': total_original_qty,
+                'total_remaining_qty': total_remaining_qty,
+                'has_exchange': len(exchange_pickings) > 0,
+                'exchanges': [],
+            })
+
+        # Exclude tickets with no remaining returnable products
+        results = [r for r in results if r['total_remaining_qty'] > 0 or r['return_status'] == 'none']
             
         return results
 
@@ -532,6 +772,33 @@ class PosSession(models.Model):
                 payment_reason = ticket
                 base_type = str(_("Intercambio Odoo"))
             
+            # === Duplicate detection for exchanges ===
+            # For Odoo tickets, check if exchange pickings already exist
+            if exchange_type == 'odoo' and origin_ref:
+                int_origin = 'INT:' + origin_ref
+                existing_exchange = self.env['stock.picking'].search([
+                    ('origin', '=', int_origin),
+                    ('state', '!=', 'cancel'),
+                ], limit=1)
+                if existing_exchange:
+                    _logger.warning(
+                        "POS Exchange: Duplicate exchange detected for %s. "
+                        "Existing picking: %s. Skipping creation.",
+                        origin_ref, existing_exchange.name
+                    )
+                    return {
+                        'success': True,
+                        'duplicate': True,
+                        'message': str(_("Intercambio ya procesado anteriormente.")),
+                        'picking_in_name': existing_exchange.name,
+                        'picking_out_name': '',
+                        'return_total': return_total,
+                        'new_total': new_total,
+                        'difference': new_total - return_total,
+                        'needs_payment': False,
+                        'cash_message': str(_("Intercambio duplicado - sin acción")),
+                    }
+            
             # === Crear picking de recepción (productos devueltos) ===
             picking_in = self._create_return_receipt(origin_ref, returned_products, partner_id)
             
@@ -568,6 +835,33 @@ class PosSession(models.Model):
                 picking_in.name, picking_out.name, difference
             )
             
+            # === Mark original order as exchanged ===
+            # Always set custom_exchange_done for badge display and refund blocking.
+            # When needs_payment=True (case 3: customer pays difference), also set
+            # custom_exchange_replaced to hide the original ticket from the popup since
+            # a new replacement POS order will be created.
+            original_order = False
+            if exchange_type == 'odoo' and ticket:
+                original_order = self.env['pos.order'].search([
+                    ('pos_reference', '=', ticket),
+                ], limit=1)
+                if original_order:
+                    try:
+                        original_order.custom_exchange_done = True
+                        if needs_payment:
+                            original_order.custom_exchange_replaced = True
+                    except (AttributeError, Exception):
+                        self.env.cr.execute(
+                            "UPDATE pos_order SET custom_exchange_done = true WHERE id = %s",
+                            [original_order.id]
+                        )
+                        if needs_payment:
+                            self.env.cr.execute(
+                                "UPDATE pos_order SET custom_exchange_replaced = true WHERE id = %s",
+                                [original_order.id]
+                            )
+                    _logger.info("POS Exchange: Marked order %s as exchanged%s", original_order.name, ' (replaced by new ticket)' if needs_payment else '')
+            
             return {
                 'success': True,
                 'picking_in_id': picking_in.id,
@@ -583,6 +877,7 @@ class PosSession(models.Model):
                 'returned_products_data': returned_products if needs_payment else [],
                 'new_products_data': new_products if needs_payment else [],
                 'exchange_ref': origin_ref,
+                'original_order_id': original_order.id if original_order else False,
             }
         except Exception as e:
             _logger.exception("POS Exchange: Error creating exchange")
@@ -658,7 +953,16 @@ class PosSession(models.Model):
             move.quantity = move.product_uom_qty
             move.picked = True
         
-        picking._action_done()
+        # Wrapped in savepoint + try/except following native POS pattern
+        self.env.flush_all()
+        try:
+            with self.env.cr.savepoint():
+                picking._action_done()
+        except (UserError, ValidationError):
+            _logger.warning(
+                "POS Exchange: Delivery picking %s could not be fully validated. "
+                "It will need manual processing.", picking.name
+            )
         
         return picking
 
@@ -722,22 +1026,24 @@ class PosSession(models.Model):
         """
         # Encabezado
         type_labels = {
-            'no_ticket': 'INTERCAMBIO SIN TICKET',
-            'arus': 'INTERCAMBIO ARUS',
-            'odoo': 'INTERCAMBIO ODOO',
+            'no_ticket': str(_('INTERCAMBIO SIN TICKET')),
+            'arus': str(_('INTERCAMBIO ARUS')),
+            'odoo': str(_('INTERCAMBIO ODOO')),
         }
-        header = type_labels.get(exchange_type, 'INTERCAMBIO')
+        header = type_labels.get(exchange_type, str(_('INTERCAMBIO')))
         
         html = '<div style="font-family: sans-serif; font-size: 13px;">'
         html += '<p><strong>═══ %s ═══</strong></p>' % header
         
         if exchange_type == 'no_ticket':
-            html += '<p>Razón: %s</p>' % ticket
+            html += '<p>%s: %s</p>' % (str(_('Razón')), ticket)
         else:
-            html += '<p>Ticket origen: %s</p>' % ticket
+            html += '<p>%s: %s</p>' % (str(_('Ticket origen')), ticket)
         
         # Productos devueltos
-        html += '<p><strong style="color:#dc2626;">Productos devueltos</strong> (Recepción: %s):</p>' % picking_in.name
+        html += '<p><strong style="color:#dc2626;">%s</strong> (%s: %s):</p>' % (
+            str(_('Productos devueltos')), str(_('Recepción')), picking_in.name
+        )
         html += '<ul>'
         for p in returned_products:
             product = self.env['product.product'].browse(p['product_id'])
@@ -747,7 +1053,9 @@ class PosSession(models.Model):
         html += '</ul>'
         
         # Productos entregados
-        html += '<p><strong style="color:#16a34a;">Productos entregados</strong> (Entrega: %s):</p>' % picking_out.name
+        html += '<p><strong style="color:#16a34a;">%s</strong> (%s: %s):</p>' % (
+            str(_('Productos entregados')), str(_('Entrega')), picking_out.name
+        )
         html += '<ul>'
         for p in new_products:
             product = self.env['product.product'].browse(p['product_id'])
@@ -757,7 +1065,9 @@ class PosSession(models.Model):
         html += '</ul>'
         
         # Resumen financiero
-        html += '<p><strong>Diferencia:</strong> $%.2f (%s)</p>' % (abs(difference), cash_message)
+        html += '<p><strong>%s:</strong> $%.2f (%s)</p>' % (
+            str(_('Diferencia')), abs(difference), cash_message
+        )
         html += '</div>'
         
         # Metadata interna en comentarios HTML (sobrevive la sanitización de Odoo)

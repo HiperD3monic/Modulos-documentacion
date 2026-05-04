@@ -76,7 +76,12 @@ export class ReturnPopup extends Component {
             partner: null,        // Cliente seleccionado
             customerTickets: [],  // Lista de tickets del cliente
             selectedTicket: null, // Objeto completo del ticket seleccionado
+            ticketSearchResults: [], // Resultados de búsqueda por referencia
+            searchingTickets: false, // Indicador de búsqueda en progreso
         });
+
+        // Debounce timer para búsqueda de tickets
+        this._ticketSearchTimer = null;
 
         // Lock para evitar múltiples confirmaciones simultáneas
         this.confirm = useAsyncLockedMethod(this.confirm);
@@ -100,13 +105,10 @@ export class ReturnPopup extends Component {
         this.state.selectedTicket = null;
         this.state.ticket = "";
         this.state.searchQuery = "";
+        this.state.ticketSearchResults = [];
+        this.state.searchingTickets = false;
 
         // If switching back to Odoo, we might want to re-fetch partner tickets
-        // but selectPartner logic handles that when partner changes. 
-        // If partner is already selected, tickets are likely cached in customerTickets.
-
-        // Fix: If partner is selected but tickets are missing (e.g. selected during Arus mode),
-        // we must fetch them now.
         if (this.state.returnType === 'odoo' && this.state.partner) {
             this._loadTicketsForPartner(this.state.partner.id);
         }
@@ -178,21 +180,98 @@ export class ReturnPopup extends Component {
         });
 
         if (selectedTicket) {
-            this.state.selectedTicket = selectedTicket;
-            this.state.ticket = selectedTicket.pos_reference || selectedTicket.name;
+            this._applyTicketSelection(selectedTicket);
+        }
+    }
 
-            // Auto-populate products from the ticket (only returnable items)
-            if (selectedTicket.lines && selectedTicket.lines.length > 0) {
-                this.state.products = selectedTicket.lines.map(line => ({
-                    product_id: line.product_id,
-                    name: line.name,
-                    quantity: line.remaining_qty || line.qty, // Default to remaining
-                    max_quantity: line.remaining_qty || line.qty, // Enforce limit
-                    price_unit: line.price_unit,
-                }));
-            } else {
-                this.state.products = [];
+    /**
+     * Búsqueda automática de tickets por referencia.
+     * Se activa al escribir en el input de ticket (modo Odoo).
+     * Usa debounce de 500ms para evitar llamadas excesivas.
+     */
+    onTicketInput(ev) {
+        const query = ev.target.value.trim();
+        this.state.ticket = ev.target.value;
+
+        // Clear previous timer
+        if (this._ticketSearchTimer) {
+            clearTimeout(this._ticketSearchTimer);
+        }
+
+        // Clear results if query is too short
+        if (query.length < 2) {
+            this.state.ticketSearchResults = [];
+            this.state.searchingTickets = false;
+            return;
+        }
+
+        // Debounce: wait 500ms before searching
+        this.state.searchingTickets = true;
+        this._ticketSearchTimer = setTimeout(async () => {
+            try {
+                const results = await this.orm.call(
+                    "pos.session",
+                    "search_ticket_by_ref",
+                    [[this.pos.session.id], query]
+                );
+                this.state.ticketSearchResults = results;
+            } catch (error) {
+                console.error("Error searching tickets:", error);
+                this.state.ticketSearchResults = [];
+            } finally {
+                this.state.searchingTickets = false;
             }
+        }, 500);
+    }
+
+    /**
+     * Selecciona un ticket de los resultados de búsqueda automática.
+     */
+    selectSearchResult(ticket) {
+        this.state.ticketSearchResults = [];
+        this._applyTicketSelection(ticket);
+    }
+
+    /**
+     * Quita el ticket seleccionado y vuelve al input de búsqueda.
+     */
+    clearSelectedTicket() {
+        this.state.selectedTicket = null;
+        this.state.ticket = "";
+        this.state.products = [];
+        this.state.ticketSearchResults = [];
+        this.state.searchingTickets = false;
+    }
+
+    /**
+     * Aplica la selección de un ticket (usado tanto por searchTickets como selectSearchResult).
+     */
+    async _applyTicketSelection(ticket) {
+        this.state.selectedTicket = ticket;
+        this.state.ticket = ticket.pos_reference || ticket.name;
+        this.state.ticketSearchResults = [];
+
+        // Auto-populate partner from the ticket if available
+        if (ticket.partner_id) {
+            const partner = this.pos.models["res.partner"].get(ticket.partner_id);
+            if (partner) {
+                this.state.partner = partner;
+                // Load partner's tickets so "change ticket" button works
+                await this._loadTicketsForPartner(partner.id);
+            }
+        }
+
+        // Auto-populate products from the ticket (only returnable items)
+        if (ticket.lines && ticket.lines.length > 0) {
+            this.state.products = ticket.lines.map(line => ({
+                product_id: line.product_id,
+                name: line.name,
+                quantity: line.remaining_qty || line.qty,
+                max_quantity: line.remaining_qty || line.qty,
+                price_unit: line.price_unit,
+            }));
+        } else {
+            this.state.products = [];
         }
     }
 
@@ -444,6 +523,18 @@ export class ReturnPopup extends Component {
             );
 
             if (result.success) {
+                // Reload the original order from server so the custom_return_done
+                // flag is properly loaded into the JS model (via raw data)
+                if (result.original_order_id) {
+                    try {
+                        await this.pos.data.loadServerOrders([
+                            ["id", "=", result.original_order_id]
+                        ]);
+                    } catch (e) {
+                        // Non-critical: badge will show after page refresh
+                        console.warn("Could not reload order:", e);
+                    }
+                }
                 this.notification.add(
                     _t("Devolución creada exitosamente. Recepción: %s", result.picking_name),
                     { type: "success" }

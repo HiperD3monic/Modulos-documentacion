@@ -71,9 +71,14 @@
                                                     <span><i class="fa fa-money me-1"/> <t t-esc="env.utils.formatCurrency(state.selectedTicket.amount_total)"/></span>
                                                 </div>
                                             </div>
-                                            <button class="btn btn-sm" style="background:#f5f3ff; color:#6366f1; border-radius:7px;" t-on-click="searchTickets" title="Cambiar Ticket">
-                                                <i class="fa fa-refresh"/>
-                                            </button>
+                                            <div class="d-flex gap-1">
+                                                <button t-if="state.customerTickets.length > 0" class="btn btn-sm" style="background:#f5f3ff; color:#6366f1; border-radius:7px;" t-on-click="searchTickets" title="Cambiar Ticket">
+                                                    <i class="fa fa-refresh"/>
+                                                </button>
+                                                <button class="btn btn-sm" style="background:#fef2f2; color:#dc2626; border-radius:7px;" t-on-click="clearSelectedTicket" title="Quitar Ticket">
+                                                    <i class="fa fa-times"/>
+                                                </button>
+                                            </div>
                                         </div>
                                     </div>
                                     
@@ -90,15 +95,56 @@
                                 </div>
 
                                 <!-- Input Box -->
-                                <input 
-                                    type="text" 
-                                    class="form-control"
-                                    style="border-radius: 8px; font-size: 0.82rem;"
-                                    t-model="state.ticket"
-                                    t-att-placeholder="inputPlaceholder"
-                                    t-att-readonly="state.selectedTicket ? 'readonly' : undefined"
-                                    t-att-class="state.selectedTicket ? 'd-none' : ''"
-                                />
+                                <div class="position-relative">
+                                    <t t-if="state.returnType === 'odoo' &amp;&amp; !state.selectedTicket">
+                                        <!-- Odoo mode: auto-search input -->
+                                        <input 
+                                            type="text" 
+                                            class="form-control"
+                                            style="border-radius: 8px; font-size: 0.82rem;"
+                                            t-att-value="state.ticket"
+                                            t-on-input="onTicketInput"
+                                            t-att-placeholder="inputPlaceholder"
+                                        />
+                                        <!-- Search indicator -->
+                                        <t t-if="state.searchingTickets">
+                                            <div class="text-muted text-center py-1" style="font-size: 0.72rem;">
+                                                <i class="fa fa-spinner fa-spin me-1"/>Buscando...
+                                            </div>
+                                        </t>
+                                        <!-- Search Results Dropdown -->
+                                        <t t-if="state.ticketSearchResults.length > 0">
+                                            <div class="ticket-search-dropdown" style="position:absolute; left:0; right:0; top:100%; z-index:100; background:#fff; border:1px solid #e5e7eb; border-radius:8px; box-shadow:0 4px 12px rgba(0,0,0,0.1); max-height:200px; overflow-y:auto; margin-top:4px;">
+                                                <t t-foreach="state.ticketSearchResults" t-as="result" t-key="result.id">
+                                                    <div class="ticket-search-item d-flex justify-content-between align-items-center gap-2 px-3 py-2"
+                                                        style="cursor:pointer; border-bottom:1px solid #f3f4f6; font-size:0.78rem;"
+                                                        t-on-click="() => this.selectSearchResult(result)">
+                                                        <div class="text-truncate" style="min-width:0;">
+                                                            <div class="fw-bold text-truncate" style="color:#4f46e5;" t-esc="result.pos_reference || result.name"/>
+                                                            <div class="text-muted text-truncate" style="font-size:0.7rem;">
+                                                                <i class="fa fa-calendar me-1"/><t t-esc="result.date_order ? result.date_order.toString().split(' ')[0] : ''"/>
+                                                                <span class="ms-2"><i class="fa fa-user me-1"/><t t-esc="result.partner_name || 'Sin cliente'"/></span>
+                                                            </div>
+                                                        </div>
+                                                        <div class="fw-bold text-nowrap" style="color:#059669;" t-esc="env.utils.formatCurrency(result.amount_total)"/>
+                                                    </div>
+                                                </t>
+                                            </div>
+                                        </t>
+                                    </t>
+                                    <t t-else="">
+                                        <!-- Non-Odoo modes or ticket already selected: simple input -->
+                                        <input 
+                                            type="text" 
+                                            class="form-control"
+                                            style="border-radius: 8px; font-size: 0.82rem;"
+                                            t-model="state.ticket"
+                                            t-att-placeholder="inputPlaceholder"
+                                            t-att-readonly="state.selectedTicket ? 'readonly' : undefined"
+                                            t-att-class="state.selectedTicket ? 'd-none' : ''"
+                                        />
+                                    </t>
+                                </div>
                             </div>
                         </div>
 
