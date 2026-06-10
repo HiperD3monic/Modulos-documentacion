@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates id="template" xml:space="preserve">
+
+    <t t-name="pos_return.ReturnButton">
+        <button class="control-button btn btn-secondary btn-lg py-5" t-on-click="click">
+            <i class="fa fa-exchange me-1" role="img" aria-label="Devolución" title="Devolución" />
+            <span>Devolución</span>
+        </button>
+    </t>
+
+    <t t-name="pos_return.ControlButtonsExtend" t-inherit="point_of_sale.ControlButtons" t-inherit-mode="extension">
+        <xpath expr="//button[contains(@t-on-click, 'clickRefund')]" position="after">
+            <ReturnButton />
+        </xpath>
+    </t>
+
+</templates>

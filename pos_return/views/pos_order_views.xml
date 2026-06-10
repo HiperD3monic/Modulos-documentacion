@@ -1,0 +1,207 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- Hide the native "Return Products" button from the pos.order form view.
+         All return operations must go through the pos_return module. -->
+    <record id="view_pos_order_form_hide_refund" model="ir.ui.view">
+        <field name="name">pos.order.form.hide.refund</field>
+        <field name="model">pos.order</field>
+        <field name="inherit_id" ref="point_of_sale.view_pos_pos_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//button[@name='refund']" position="replace">
+            </xpath>
+        </field>
+    </record>
+
+    <!-- Add Return/Exchange audit tab to the pos.order form view -->
+    <record id="view_pos_order_form_return_tab" model="ir.ui.view">
+        <field name="name">pos.order.form.return.tab</field>
+        <field name="model">pos.order</field>
+        <field name="inherit_id" ref="point_of_sale.view_pos_pos_form"/>
+        <field name="priority">20</field>
+        <field name="arch" type="xml">
+
+            <!-- Add status badges in the button_box -->
+            <xpath expr="//div[@name='button_box']" position="inside">
+                <field name="return_exchange_status" invisible="1"/>
+                <button type="object" name="action_view_exchange_pickings"
+                    class="oe_stat_button" icon="fa-exchange"
+                    invisible="exchange_picking_count == 0">
+                    <field name="exchange_picking_count" widget="statinfo" string="Pickings Int."/>
+                </button>
+            </xpath>
+
+            <!-- Add the Return/Exchange tab after existing pages -->
+            <xpath expr="//page[@name='extra']" position="after">
+                <page string="Devolución / Intercambio" name="return_exchange"
+                      invisible="return_exchange_status == 'none' and return_picking_count == 0 and exchange_picking_count == 0 and refund_order_count == 0 and amount_total &gt;= 0">
+                    <group>
+                        <group string="Estado de la Orden"
+                               invisible="return_exchange_status == 'exchange_order'">
+                            <field name="custom_return_done" readonly="1"/>
+                            <field name="custom_exchange_done" readonly="1"/>
+                            <field name="custom_exchange_replaced" readonly="1"/>
+                        </group>
+                        <group string="Información del Intercambio"
+                               invisible="return_exchange_status != 'exchange_order'">
+                            <field name="exchange_origin_order_id" readonly="1"
+                                string="Ticket Original"/>
+                            <field name="exchange_origin_ref" readonly="1"
+                                string="Ref. Ticket Original"/>
+                        </group>
+                        <group string="Resumen">
+                            <field name="return_exchange_status" readonly="1" widget="badge"
+                                decoration-warning="return_exchange_status == 'partial'"
+                                decoration-info="return_exchange_status in ('returned', 'exchange_order')"
+                                decoration-muted="return_exchange_status == 'exchanged'"
+                                decoration-danger="return_exchange_status == 'exchange_replaced'"
+                                decoration-success="return_exchange_status == 'refund'"/>
+                            <field name="custom_return_type_display" readonly="1"
+                                invisible="not custom_return_type_display"
+                                string="Tipo de Operación"/>
+                            <field name="custom_return_reason" readonly="1"
+                                invisible="not custom_return_reason"
+                                string="Razón / Referencia"/>
+                            <field name="return_picking_count" readonly="1"
+                                invisible="return_picking_count == 0"/>
+                            <field name="exchange_picking_count" readonly="1"
+                                invisible="exchange_picking_count == 0"/>
+                            <field name="refund_order_count" readonly="1"/>
+                        </group>
+                    </group>
+
+                    <!-- Remaining products indicator -->
+                    <div invisible="not original_remaining_summary">
+                        <field name="original_remaining_summary" nolabel="1"
+                            readonly="1" class="w-100"/>
+                    </div>
+
+                    <!-- Linked Refund Orders -->
+                    <div invisible="refund_order_count == 0">
+                        <separator string="Órdenes de Reembolso Vinculadas"/>
+                        <field name="refund_order_ids" nolabel="1" readonly="1">
+                            <list string="Reembolsos" create="false" delete="false">
+                                <field name="name" string="Referencia"/>
+                                <field name="pos_reference" string="Nº Ticket"/>
+                                <field name="date_order" string="Fecha"/>
+                                <field name="amount_total" string="Total"/>
+                                <field name="state" string="Estado" widget="badge"
+                                    decoration-success="state == 'done'"
+                                    decoration-info="state == 'paid'"/>
+                            </list>
+                        </field>
+                    </div>
+
+                    <!-- Return Pickings (incoming) -->
+                    <div invisible="return_picking_count == 0">
+                        <separator string="Recepciones de Devolución"/>
+                        <field name="return_picking_ids" nolabel="1" readonly="1">
+                            <list string="Recepciones" create="false" delete="false">
+                                <field name="name" string="Referencia"/>
+                                <field name="origin" string="Origen"/>
+                                <field name="partner_id" string="Cliente"/>
+                                <field name="scheduled_date" string="Fecha Programada"/>
+                                <field name="date_done" string="Fecha Realizada"/>
+                                <field name="state" string="Estado" widget="badge"
+                                    decoration-success="state == 'done'"
+                                    decoration-info="state == 'assigned'"
+                                    decoration-warning="state == 'waiting'"
+                                    decoration-danger="state == 'cancel'"/>
+                                <field name="picking_type_id" string="Tipo"/>
+                            </list>
+                        </field>
+                    </div>
+
+                    <!-- Exchange Pickings (incoming - returned products) -->
+                    <div invisible="not exchange_picking_in_ids">
+                        <separator string="Recepciones de Intercambio (Productos Devueltos)"/>
+                        <field name="exchange_picking_in_ids" nolabel="1" readonly="1">
+                            <list string="Recepciones Intercambio" create="false" delete="false">
+                                <field name="name" string="Referencia"/>
+                                <field name="origin" string="Origen"/>
+                                <field name="partner_id" string="Cliente"/>
+                                <field name="scheduled_date" string="Fecha Programada"/>
+                                <field name="date_done" string="Fecha Realizada"/>
+                                <field name="state" string="Estado" widget="badge"
+                                    decoration-success="state == 'done'"
+                                    decoration-info="state == 'assigned'"
+                                    decoration-warning="state == 'waiting'"
+                                    decoration-danger="state == 'cancel'"/>
+                                <field name="picking_type_id" string="Tipo"/>
+                            </list>
+                        </field>
+                    </div>
+
+                    <!-- Exchange Pickings (outgoing - new products) -->
+                    <div invisible="not exchange_picking_out_ids">
+                        <separator string="Entregas de Intercambio (Productos Nuevos)"/>
+                        <field name="exchange_picking_out_ids" nolabel="1" readonly="1">
+                            <list string="Entregas Intercambio" create="false" delete="false">
+                                <field name="name" string="Referencia"/>
+                                <field name="origin" string="Origen"/>
+                                <field name="partner_id" string="Cliente"/>
+                                <field name="scheduled_date" string="Fecha Programada"/>
+                                <field name="date_done" string="Fecha Realizada"/>
+                                <field name="state" string="Estado" widget="badge"
+                                    decoration-success="state == 'done'"
+                                    decoration-info="state == 'assigned'"
+                                    decoration-warning="state == 'waiting'"
+                                    decoration-danger="state == 'cancel'"/>
+                                <field name="picking_type_id" string="Tipo"/>
+                            </list>
+                        </field>
+                    </div>
+                </page>
+            </xpath>
+
+        </field>
+    </record>
+
+    <!-- Add return type badge column to the POS order list view -->
+    <record id="view_pos_order_tree_return_type" model="ir.ui.view">
+        <field name="name">pos.order.list.return.type</field>
+        <field name="model">pos.order</field>
+        <field name="inherit_id" ref="point_of_sale.view_pos_order_tree"/>
+        <field name="priority">25</field>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='state']" position="after">
+                <field name="custom_return_type_display" string="Tipo Dev."
+                    optional="show" widget="badge"
+                    decoration-muted="custom_return_type_display == 'Dev. Odoo'"
+                    decoration-danger="custom_return_type_display == 'Dev. Sin Ticket'"
+                    decoration-warning="custom_return_type_display in ('Dev. Arus', 'Devuelto Parcial')"
+                    decoration-info="custom_return_type_display == 'Intercambio'"
+                    decoration-success="custom_return_type_display in ('Devuelto', 'Intercambiado')"/>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- Add search filters for return types -->
+    <record id="view_pos_order_search_return_type" model="ir.ui.view">
+        <field name="name">pos.order.search.return.type</field>
+        <field name="model">pos.order</field>
+        <field name="inherit_id" ref="point_of_sale.view_pos_order_search"/>
+        <field name="priority">25</field>
+        <field name="arch" type="xml">
+            <xpath expr="//search" position="inside">
+                <separator/>
+                <filter string="Dev. Sin Ticket" name="filter_sin_ticket"
+                    domain="[('internal_note', 'ilike', 'Sin Ticket')]"/>
+                <filter string="Dev. Arus" name="filter_arus"
+                    domain="[('internal_note', 'ilike', 'Arus')]"/>
+                <filter string="Dev. Odoo" name="filter_odoo_return"
+                    domain="[('internal_note', 'ilike', 'Devolución'), ('internal_note', 'ilike', 'Odoo')]"/>
+                <filter string="Intercambios" name="filter_exchange"
+                    domain="[('internal_note', 'ilike', 'Intercambio')]"/>
+                <separator/>
+                <filter string="Órdenes Devueltas" name="filter_returned"
+                    domain="[('custom_return_done', '=', True)]"/>
+                <filter string="Dev. Parcial" name="filter_partial"
+                    domain="[('custom_return_done', '=', False), ('custom_exchange_done', '=', False), ('amount_total', '&gt;', 0)]"/>
+                <filter string="Órdenes Intercambiadas" name="filter_exchanged"
+                    domain="[('custom_exchange_done', '=', True)]"/>
+            </xpath>
+        </field>
+    </record>
+
+</odoo>

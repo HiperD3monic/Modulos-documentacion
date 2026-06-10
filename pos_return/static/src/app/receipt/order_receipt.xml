@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates id="template" xml:space="preserve">
+
+    <t t-name="pos_return.OrderReceipt" t-inherit="point_of_sale.OrderReceipt" t-inherit-mode="extension">
+
+        <!-- Hide general_customer_note from receipt when it contains our possession data -->
+        <!-- We render possession items with proper formatting instead -->
+
+        <!-- Insert structured possession section before the footer -->
+        <xpath expr="//div[hasclass('before-footer')]" position="before">
+            <t t-if="possessionItems.length > 0">
+                <div class="pos-receipt-possession pt-3">
+                    <!-- Section header -->
+                    <div class="fw-bolder border-top pt-2 pb-1" style="font-size: 90%;">
+                        Productos en posesión del cliente:
+                    </div>
+                    <!-- Column header matching orderline style -->
+                    <div class="d-flex justify-content-between" style="font-size: 80%;">
+                        <span class="fw-bolder">Artículo</span>
+                        <span class="fw-bolder">Cant.</span>
+                    </div>
+                    <!-- Product rows -->
+                    <t t-foreach="possessionItems" t-as="item" t-key="item_index">
+                        <div class="d-flex justify-content-between" style="font-size: 90%;">
+                            <span class="text-wrap" t-esc="item.name"/>
+                            <span class="font-monospace ps-2" t-esc="item.qty"/>
+                        </div>
+                    </t>
+                </div>
+            </t>
+        </xpath>
+
+    </t>
+
+</templates>

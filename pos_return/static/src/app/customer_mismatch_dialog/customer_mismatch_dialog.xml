@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+
+    <t t-name="pos_return.CustomerMismatchDialog">
+        <Dialog title="'Cliente diferente'" size="'md'">
+            <div class="px-3 py-2">
+                <p t-esc="props.body" style="font-size: 14px; line-height: 1.5;"/>
+            </div>
+            <t t-set-slot="footer">
+                <div class="d-flex gap-2 w-100 justify-content-end">
+                    <button class="btn btn-secondary"
+                            t-on-click="_onRemoveClient">
+                        Quitar cliente
+                    </button>
+                    <button class="btn btn-primary"
+                            t-on-click="_onKeepClient">
+                        Vincular al cliente
+                    </button>
+                </div>
+            </t>
+        </Dialog>
+    </t>
+
+</templates>

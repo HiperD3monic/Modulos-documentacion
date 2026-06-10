@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates id="template" xml:space="preserve">
+
+    <!-- Add exchange/return badges to TicketScreen order rows -->
+    <t t-name="pos_return.TicketScreen" t-inherit="point_of_sale.TicketScreen" t-inherit-mode="extension">
+
+        <!-- Desktop view: add badges next to status in the last visible column -->
+        <xpath expr="//td[@name='delete-column']" position="before">
+            <td class="align-middle text-center">
+                <div class="d-flex flex-column align-items-center gap-1">
+                    <t t-set="_labels" t-value="getOrderTypeLabels(order)" />
+                    <t t-foreach="_labels" t-as="lbl" t-key="lbl_index">
+                        <div t-attf-class="badge rounded fs-6 text-bg-{{ lbl.color }}" t-esc="lbl.text"/>
+                    </t>
+                </div>
+            </td>
+        </xpath>
+
+        <!-- Mobile view: add badges next to the status -->
+        <xpath expr="//div[@name='delete-column']" position="before">
+            <div class="d-flex align-items-center px-1 gap-1 flex-wrap">
+                <t t-set="_labels" t-value="getOrderTypeLabels(order)" />
+                <t t-foreach="_labels" t-as="lbl" t-key="lbl_index">
+                    <div t-attf-class="badge rounded fs-6 text-bg-{{ lbl.color }}" t-esc="lbl.text"/>
+                </t>
+            </div>
+        </xpath>
+
+        <!-- Show remaining products (customer possession) below order lines -->
+        <xpath expr="//OrderDisplay" position="after">
+            <t t-set="_remainingProducts" t-value="getRemainingProducts(getSelectedOrder())" />
+            <t t-if="_remainingProducts.length > 0">
+                <div class="mx-2 mb-2 p-3 rounded-3" style="background: #e8f5e9; border: 1px solid #a5d6a7;">
+                    <div class="mb-2">
+                        <strong style="color: #2e7d32; font-size: 0.95em;">Productos en posesión del cliente</strong>
+                    </div>
+                    <div class="d-flex justify-content-between px-2 mb-1" style="font-size: 0.8em; color: #666;">
+                        <span class="fw-bolder">Artículo</span>
+                        <span class="fw-bolder">Cant.</span>
+                    </div>
+                    <t t-foreach="_remainingProducts" t-as="product" t-key="product_index">
+                        <div class="d-flex justify-content-between align-items-center py-1 px-2 mb-1 rounded" style="background: rgba(255,255,255,0.7);">
+                            <span style="font-size: 0.9em; color: #333;" t-esc="product.name"/>
+                            <span class="fw-bolder font-monospace ps-2" style="font-size: 0.9em; color: #333;" t-esc="product.qty"/>
+                        </div>
+                    </t>
+                </div>
+            </t>
+        </xpath>
+
+        <!-- HIDE: Native "Reembolso" ActionpadWidget in TicketScreen (big button bottom-right) -->
+        <xpath expr="//ActionpadWidget[@actionName.translate='Refund']" position="replace">
+        </xpath>
+
+        <!-- HIDE visually: Numpad + subpads container (keep in DOM for numberBuffer lifecycle) -->
+        <xpath expr="//div[hasclass('subpads')]" position="attributes">
+            <attribute name="style">display:none !important</attribute>
+        </xpath>
+
+        <!-- HIDE: Refund instruction text "Select the product(s) to refund..." -->
+        <xpath expr="//div[contains(@class, 'bg-view') and contains(@class, 'text-center')]" position="replace">
+        </xpath>
+
+    </t>
+
+    <!-- HIDE: Native "Refund" button in the Actions popup menu -->
+    <t t-name="pos_return.ControlButtons" t-inherit="point_of_sale.ControlButtons" t-inherit-mode="extension">
+        <xpath expr="//button[contains(@t-on-click, 'clickRefund')]" position="replace">
+        </xpath>
+    </t>
+
+</templates>
